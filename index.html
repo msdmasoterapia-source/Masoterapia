@@ -1278,12 +1278,10 @@ function _doSaveTurno(){
       if(!gcalIsConnected()) return;
       const savedTurno = S.turnos.find(t=>t.id===obj.id);
       if(!savedTurno) return;
-      if(estado === 'Pendiente' && !savedTurno.gcalId){
+      if(estado === 'Pendiente' && !getGcalId(obj.id)){
         await gcalAddTurno(savedTurno);
-      } else if((estado === 'Confirmado' || estado === 'Cancelado')){
-        if(savedTurno.gcalId){
-          await gcalDeleteTurno(savedTurno);
-        }
+      } else if(estado === 'Confirmado' || estado === 'Cancelado'){
+        await gcalDeleteTurno(savedTurno);
       }
     }, 500);
   } catch(e) {
@@ -1319,7 +1317,7 @@ function _doSaveMovimiento(){
 function delTurno(id){
   if(!confirm('¿Eliminar turno?'))return;
   const turno=S.turnos.find(t=>t.id===id);
-  if(turno&&turno.gcalId&&gcalIsConnected()) gcalDeleteTurno(turno);
+  if(turno&&gcalIsConnected()) gcalDeleteTurno(turno);
   S.turnos=S.turnos.filter(t=>t.id!==id);
   save(); renderAll();
 }
@@ -1659,6 +1657,12 @@ function exportarPDF(){
 function setSyncStatus(s,t){ const dot=document.getElementById('syncDot'),txt=document.getElementById('syncTxt'); if(!dot||!txt)return; dot.className='sync-dot '+s; txt.textContent=t; }
 
 
+
+// ── GCAL IDS — stored locally, never synced via Firebase ────────
+function getGcalId(turnoId){ return localStorage.getItem('gcal_'+turnoId); }
+function setGcalId(turnoId, gcalId){ localStorage.setItem('gcal_'+turnoId, gcalId); }
+function removeGcalId(turnoId){ localStorage.removeItem('gcal_'+turnoId); }
+
 // ── GOOGLE CALENDAR ───────────────────────────────────────────
 const GCAL_CLIENT_ID = '510024136631-2arbr9f0iupluelhgesubjjs85gpju9k.apps.googleusercontent.com';
 const GCAL_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
@@ -1755,14 +1759,12 @@ function turnoToGCalEvent(t){
 
 async function gcalAddTurno(turno){
   if(!gcalIsConnected()) return;
-  // Don't add if already has gcalId
-  const existing = S.turnos.find(t=>t.id===turno.id);
-  if(existing&&existing.gcalId) return;
+  // Don't add if already has gcalId in localStorage
+  if(getGcalId(turno.id)) return;
   const event = turnoToGCalEvent(turno);
   const res = await gcalRequest('POST', 'https://www.googleapis.com/calendar/v3/calendars/primary/events', event);
   if(res && res.id){
-    const idx = S.turnos.findIndex(t=>t.id===turno.id);
-    if(idx>=0){ S.turnos[idx].gcalId = res.id; save(); }
+    setGcalId(turno.id, res.id);
   }
 }
 
@@ -1775,7 +1777,7 @@ async function gcalDeleteTurno(turno){
 
 async function sincronizarTodosPendientes(){
   if(!gcalIsConnected()){ alert('Conectá Google Calendar primero'); return; }
-  const pendientes = S.turnos.filter(t=>t.estado==='Pendiente'&&!t.gcalId&&!t._gcalSyncing);
+  const pendientes = S.turnos.filter(t=>t.estado==='Pendiente'&&!getGcalId(t.id)&&!t._gcalSyncing);
   if(!pendientes.length){ alert('No hay turnos pendientes sin sincronizar'); return; }
   setSyncStatus('syncing', 'Sincronizando Calendar...');
   // Mark all as syncing to prevent double-sync
@@ -1805,12 +1807,9 @@ function initFirebase(){
   setSyncStatus('syncing','Conectando...');
   _unsubscribe=window._fbListen(function(remoteData){
     if(_localChange){_localChange=false;return;}
-    // Preserve gcalIds from local state before overwriting
-    const localGcalIds={};
-    (S.turnos||[]).forEach(t=>{ if(t.gcalId) localGcalIds[t.id]=t.gcalId; });
+    // gcalIds stored in localStorage separately
     S={clientes:remoteData.clientes||[],turnos:remoteData.turnos||[],movimientos:remoteData.movimientos||[],categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]}};
-    // Restore gcalIds
-    S.turnos.forEach(t=>{ if(localGcalIds[t.id]) t.gcalId=localGcalIds[t.id]; });
+
     ajustes=S.ajustes;
     aplicarTema(); aplicarColor();
     localStorage.setItem('masov2',JSON.stringify(S));
