@@ -1273,19 +1273,19 @@ function _doSaveTurno(){
     save();
     renderAll();
     closeModal('turno');
-    // Google Calendar sync
-    if(gcalIsConnected()){
+    // Google Calendar sync — immediate
+    setTimeout(async ()=>{
+      if(!gcalIsConnected()) return;
       const savedTurno = S.turnos.find(t=>t.id===obj.id);
-      if(savedTurno){
-        if(estado === 'Pendiente' && !savedTurno.gcalId){
-          // New pending turno — add to GCal
-          gcalAddTurno(savedTurno);
-        } else if((estado === 'Confirmado' || estado === 'Cancelado') && savedTurno.gcalId){
-          // Confirmed or cancelled — remove from GCal
-          gcalDeleteTurno(savedTurno);
+      if(!savedTurno) return;
+      if(estado === 'Pendiente' && !savedTurno.gcalId){
+        await gcalAddTurno(savedTurno);
+      } else if((estado === 'Confirmado' || estado === 'Cancelado')){
+        if(savedTurno.gcalId){
+          await gcalDeleteTurno(savedTurno);
         }
       }
-    }
+    }, 500);
   } catch(e) {
     console.error('Error guardando turno:', e);
     alert('Error al guardar: '+e.message);
@@ -1755,10 +1755,12 @@ function turnoToGCalEvent(t){
 
 async function gcalAddTurno(turno){
   if(!gcalIsConnected()) return;
+  // Don't add if already has gcalId
+  const existing = S.turnos.find(t=>t.id===turno.id);
+  if(existing&&existing.gcalId) return;
   const event = turnoToGCalEvent(turno);
   const res = await gcalRequest('POST', 'https://www.googleapis.com/calendar/v3/calendars/primary/events', event);
   if(res && res.id){
-    // Save gcal event id in turno
     const idx = S.turnos.findIndex(t=>t.id===turno.id);
     if(idx>=0){ S.turnos[idx].gcalId = res.id; save(); }
   }
@@ -1803,7 +1805,12 @@ function initFirebase(){
   setSyncStatus('syncing','Conectando...');
   _unsubscribe=window._fbListen(function(remoteData){
     if(_localChange){_localChange=false;return;}
+    // Preserve gcalIds from local state before overwriting
+    const localGcalIds={};
+    (S.turnos||[]).forEach(t=>{ if(t.gcalId) localGcalIds[t.id]=t.gcalId; });
     S={clientes:remoteData.clientes||[],turnos:remoteData.turnos||[],movimientos:remoteData.movimientos||[],categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]}};
+    // Restore gcalIds
+    S.turnos.forEach(t=>{ if(localGcalIds[t.id]) t.gcalId=localGcalIds[t.id]; });
     ajustes=S.ajustes;
     aplicarTema(); aplicarColor();
     localStorage.setItem('masov2',JSON.stringify(S));
