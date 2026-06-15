@@ -2,6 +2,10 @@
 <html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="version" content="1781357230">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Masoterapia Premium</title>
 <link rel="manifest" href="manifest.json">
@@ -651,6 +655,13 @@ textarea{resize:vertical;min-height:72px;}
       <div class="form-group"><label>Servicio *</label>
         <select id="t-servicio"><option value="">Seleccionar...</option><option>Masaje relajante</option><option>Masaje descontracturante</option><option>Masaje deportivo</option><option>Reflexología</option><option>Masaje prenatal</option><option>Drenaje linfático</option><option>Masaje tejido profundo</option><option>Otro</option></select>
       </div>
+      <div class="form-group" id="tipo-sesion-group" style="display:none;">
+        <label>Tipo de sesión</label>
+        <select id="t-tipo-sesion" onchange="onTipoSesionChange()">
+          <option value="pack">Usar pack activo</option>
+          <option value="suelta">Sesión suelta (sin descuento)</option>
+        </select>
+      </div>
       <div class="form-group full"><div id="pack-info-turno" style="display:none;background:rgba(92,138,107,.12);color:var(--success);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:500;"></div></div>
       <div class="form-group"><label>Precio base ($)</label><input type="number" id="t-precio" placeholder="0" oninput="calcTotal()" onchange="calcTotal()" onblur="calcTotal()"></div>
       <div class="form-group"><label>Descuento (%)</label><input type="number" id="t-desc" placeholder="0" oninput="calcTotal()" onchange="calcTotal()" onblur="calcTotal()"></div>
@@ -1021,6 +1032,8 @@ function openModal(type,id){
       ['t-id','t-hora','t-servicio','t-precio','t-desc','t-total','t-notas'].forEach(i=>document.getElementById(i).value='');
       document.getElementById('t-estado').value='Pendiente'; document.getElementById('t-fecha').valueAsDate=new Date();
       document.getElementById('pack-info-turno').style.display='none';
+      document.getElementById('tipo-sesion-group').style.display='none';
+      document.getElementById('t-tipo-sesion').value='pack';
       document.getElementById('t-servicio').onchange=onServicioChange;
     }
   }
@@ -1147,6 +1160,24 @@ function aplicarDescFrecuencia(desc){
   pi.style.background='rgba(92,138,107,.12)'; pi.style.color='var(--success)';
   calcTotal();
 }
+
+function onTipoSesionChange(){
+  const tipo=document.getElementById('t-tipo-sesion').value;
+  const cid=document.getElementById('t-cliente').value;
+  const pi=document.getElementById('pack-info-turno');
+  if(tipo==='suelta'){
+    // Clear discount, show info
+    document.getElementById('t-desc').value='0';
+    pi.style.background='rgba(184,134,11,.12)';
+    pi.style.color='var(--accent)';
+    pi.textContent='⚠️ Sesión suelta — sin descuento de pack';
+    pi.style.display='block';
+    calcTotal();
+  } else {
+    // Re-run cliente change to apply pack discount
+    onClienteChangeTurno();
+  }
+}
 function calcTotal(){ const p=parseFloat(document.getElementById('t-precio').value)||0; const d=parseFloat(document.getElementById('t-desc').value)||0; document.getElementById('t-total').value=(p*(1-d/100)).toFixed(0); }
 function getClientPackInfo(cid){
   const c=S.clientes.find(x=>x.id===cid); if(!c||!c.pack) return null;
@@ -1167,9 +1198,19 @@ function onClienteChangeTurno(){
   const cid=document.getElementById('t-cliente').value;
   const info=getClientPackInfo(cid);
   const pi=document.getElementById('pack-info-turno');
+  const tipoGroup=document.getElementById('tipo-sesion-group');
+  const tipoSel=document.getElementById('t-tipo-sesion');
+  // Show tipo sesion selector if client has an active pack with sessions remaining
+  if(info&&info.restantes>0){
+    tipoGroup.style.display='block';
+    tipoSel.value='pack';
+  } else {
+    tipoGroup.style.display='none';
+    tipoSel.value='suelta';
+  }
   // Check frecuencia discount
   const frecInfo=calcFrecuenciaDesc(cid);
-  if(info&&info.restantes>0){
+  if(info&&info.restantes>0&&tipoSel.value!=='suelta'){
     document.getElementById('t-desc').value=info.pack.descuento;
     pi.style.background='rgba(92,138,107,.12)'; pi.style.color='var(--success)';
     pi.textContent='Pack: '+info.pack.nombre+' | Usados: '+info.usados+'/'+info.pack.turnos+' | Restantes: '+info.restantes;
@@ -1273,14 +1314,17 @@ function _doSaveTurno(){
     save();
     renderAll();
     closeModal('turno');
-    // Google Calendar sync — immediate
+    // Google Calendar sync
     setTimeout(async ()=>{
       if(!gcalIsConnected()) return;
       const savedTurno = S.turnos.find(t=>t.id===obj.id);
       if(!savedTurno) return;
-      if(estado === 'Pendiente' && !getGcalId(obj.id)){
+      const isNew = !prevTurno;
+      if(isNew && estado === 'Pendiente'){
+        // New turno — add to GCal
         await gcalAddTurno(savedTurno);
-      } else if(estado === 'Confirmado' || estado === 'Cancelado'){
+      } else if(estado === 'Cancelado'){
+        // Cancelled — remove from GCal
         await gcalDeleteTurno(savedTurno);
       }
     }, 500);
@@ -1649,7 +1693,11 @@ function exportarPDF(){
   const movs=S.movimientos.filter(mv=>mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso}));
   const rows=[...turnosIng,...movs].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const totalIng=rows.reduce((s,r)=>s+r.ing,0); const totalEgr=rows.reduce((s,r)=>s+r.egr,0);
-  const html=`<html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;font-size:12px;padding:20px;}h1{font-size:20px;margin-bottom:4px;}p{color:#888;margin-bottom:16px;}table{width:100%;border-collapse:collapse;}th{background:#2C1F15;color:#D4A843;padding:8px;text-align:left;font-size:11px;}td{padding:7px 8px;border-bottom:1px solid #eee;}.pos{color:green;font-weight:600;}.neg{color:red;font-weight:600;}.total{font-weight:700;background:#f8f5f0;}</style></head><body><h1>Reporte de Finanzas</h1><p>${MESES[parseInt(m)-1]} ${y} · Masoterapia Premium</p><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Origen</th><th>Ingreso</th><th>Gasto</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fmtF(r.fecha)}</td><td>${r.desc||'—'}</td><td>${r.cat}</td><td>${r.origen}</td><td class="pos">${r.ing?fmt$(r.ing):''}</td><td class="neg">${r.egr?fmt$(r.egr):''}</td></tr>`).join('')}<tr class="total"><td colspan="4"><b>TOTALES</b></td><td class="pos">${fmt$(totalIng)}</td><td class="neg">${fmt$(totalEgr)}</td></tr><tr class="total"><td colspan="4"><b>BALANCE NETO</b></td><td colspan="2" class="${totalIng-totalEgr>=0?'pos':'neg'}">${fmt$(totalIng-totalEgr)}</td></tr></tbody></table></body></html>`;
+  const html=`<html><head><meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="version" content="1781357230"><style>body{font-family:sans-serif;font-size:12px;padding:20px;}h1{font-size:20px;margin-bottom:4px;}p{color:#888;margin-bottom:16px;}table{width:100%;border-collapse:collapse;}th{background:#2C1F15;color:#D4A843;padding:8px;text-align:left;font-size:11px;}td{padding:7px 8px;border-bottom:1px solid #eee;}.pos{color:green;font-weight:600;}.neg{color:red;font-weight:600;}.total{font-weight:700;background:#f8f5f0;}</style></head><body><h1>Reporte de Finanzas</h1><p>${MESES[parseInt(m)-1]} ${y} · Masoterapia Premium</p><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Origen</th><th>Ingreso</th><th>Gasto</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fmtF(r.fecha)}</td><td>${r.desc||'—'}</td><td>${r.cat}</td><td>${r.origen}</td><td class="pos">${r.ing?fmt$(r.ing):''}</td><td class="neg">${r.egr?fmt$(r.egr):''}</td></tr>`).join('')}<tr class="total"><td colspan="4"><b>TOTALES</b></td><td class="pos">${fmt$(totalIng)}</td><td class="neg">${fmt$(totalEgr)}</td></tr><tr class="total"><td colspan="4"><b>BALANCE NETO</b></td><td colspan="2" class="${totalIng-totalEgr>=0?'pos':'neg'}">${fmt$(totalIng-totalEgr)}</td></tr></tbody></table></body></html>`;
   const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
 }
 
@@ -1843,7 +1891,7 @@ function buscarGlobal(){
 }
 function bCls(e){ return e==='Confirmado'?'ok':e==='Cancelado'?'cancel':'pend'; }
 
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js')); }
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=1781357230')); }
 </script>
 
 <script type="module">
