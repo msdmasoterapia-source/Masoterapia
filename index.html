@@ -402,6 +402,7 @@ textarea{resize:vertical;min-height:72px;}
       <div class="gb-item"><div class="label">Clientes</div><div class="val" id="db-cli">0</div></div>
     </div>
   </div>
+  <div id="db-deuda" style="display:none;background:#fce8e8;color:var(--danger);border-radius:12px;padding:12px 18px;margin-bottom:16px;font-size:13px;cursor:pointer;" onclick="nav('clientes',document.querySelector('[onclick*=clientes]'))"></div>
   <div class="charts-grid">
     <div class="chart-card"><h3>Últimos 6 meses</h3><div class="chart-wrap"><canvas id="chartBarras"></canvas></div></div>
     <div class="chart-card"><h3>Distribución del mes</h3><div class="chart-wrap"><canvas id="chartDona"></canvas></div></div>
@@ -506,6 +507,7 @@ textarea{resize:vertical;min-height:72px;}
     <div class="stat-card c4"><div class="stat-label">Gasto negocio</div><div class="stat-value" id="r-egr-neg">$0</div></div>
     <div class="stat-card c4"><div class="stat-label">Gasto personal</div><div class="stat-value" id="r-egr-per">$0</div></div>
   </div>
+  <div id="db-deuda" style="display:none;background:#fce8e8;color:var(--danger);border-radius:12px;padding:12px 18px;margin-bottom:16px;font-size:13px;cursor:pointer;" onclick="nav('clientes',document.querySelector('[onclick*=clientes]'))"></div>
   <div class="charts-grid">
     <div class="chart-card"><h3>Comparación de meses</h3><div class="chart-wrap"><canvas id="chartCmp"></canvas></div></div>
     <div class="chart-card"><h3>Gastos por categoría</h3><div class="chart-wrap"><canvas id="chartCats"></canvas></div></div>
@@ -697,6 +699,8 @@ textarea{resize:vertical;min-height:72px;}
       </div>
       <div class="form-group"><label>Turnos restantes</label><input type="number" id="c-turnos-rest" readonly style="background:var(--warm);cursor:default;"></div>
       <div class="form-group"><label>Descuento (%)</label><input type="number" id="c-desc" readonly style="background:var(--warm);cursor:default;"></div>
+      <div class="form-group"><label>Deuda ($)</label><input type="number" id="c-deuda" placeholder="0" min="0"></div>
+      <div class="form-group"><label>Motivo deuda</label><input type="text" id="c-deuda-motivo" placeholder="Ej: Debe sesión del 10/06"></div>
       <div class="form-group full"><label>Observaciones</label><textarea id="c-obs" placeholder="Alergias, condiciones especiales..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('cliente')">Cancelar</button><button class="btn btn-primary" onclick="saveCliente()">Guardar</button></div>
@@ -845,6 +849,7 @@ function renderQuickView(){
         <div style="font-weight:600;font-size:15px;">${t.clienteNombre}</div>
         <div style="font-size:13px;color:var(--stone);">${t.servicio}</div>
         ${t.notas?`<div style="font-size:11px;color:var(--clay);margin-top:2px;">📝 ${t.notas}</div>`:''}
+        ${t.pago?`<div style="font-size:11px;color:var(--stone);margin-top:2px;">${t.pago==='Efectivo'?'💵':t.pago==='Transferencia'?'📱':'💳'} ${t.pago}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <div style="font-weight:600;font-size:14px;">${fmt$(t.total)}</div>
@@ -1060,10 +1065,12 @@ function openModal(type,id){
       document.getElementById('c-id').value=c.id; document.getElementById('c-nombre').value=c.nombre;
       document.getElementById('c-tel').value=c.telefono||''; document.getElementById('c-cumple').value=c.cumple||'';
       document.getElementById('c-obs').value=c.obs||'';
+      document.getElementById('c-deuda').value=c.deuda||'';
+      document.getElementById('c-deuda-motivo').value=c.deudaMotivo||'';
       populatePackSelect('c-pack',c.pack||''); onPackChange();
     } else {
       document.getElementById('mc-title').textContent='Nuevo cliente';
-      ['c-id','c-nombre','c-tel','c-cumple','c-obs'].forEach(i=>document.getElementById(i).value='');
+      ['c-id','c-nombre','c-tel','c-cumple','c-obs','c-deuda','c-deuda-motivo'].forEach(i=>document.getElementById(i).value='');
       populatePackSelect('c-pack',''); onPackChange();
     }
   }
@@ -1134,6 +1141,7 @@ function abrirFicha(cid){
         <p>${c.telefono?`📞 ${c.telefono}`:'Sin teléfono'} ${c.cumple?'· 🎂 '+fmtF(c.cumple):''}</p>
         <p style="margin-top:4px;">${pack?'Pack: '+pack.nombre+' · '+ses+'/'+pack.turnos+' sesiones':'Sin pack'}</p>
         ${c.obs?`<p style="margin-top:4px;font-size:12px;color:var(--stone);">${c.obs}</p>`:''}
+        ${c.deuda>0?`<p style="margin-top:6px;background:#fce8e8;color:var(--danger);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500;">💸 Deuda: ${fmt$(c.deuda)}${c.deudaMotivo?' — '+c.deudaMotivo:''}</p>`:''}
       </div>
       ${waNum?`<a href="https://wa.me/${waNum}" target="_blank" class="btn btn-success btn-sm" style="margin-left:auto;">💬 WhatsApp</a>`:''}
     </div>
@@ -1402,6 +1410,18 @@ function renderDashboard(){
   const balAnt=miAnt-meAnt, balAct=mi-me;
   const cmpEl=document.getElementById('db-cmp');
   if(cmpEl&&miAnt>0){ const diff=Math.round(((mi-miAnt)/miAnt)*100); cmpEl.textContent=(diff>=0?'▲ +':'▼ ')+diff+'% vs '+MESES[now2.getMonth()===0?11:now2.getMonth()-1]; cmpEl.style.color=diff>=0?'#90EE90':'#FFB3B3'; }
+  // Deuda alert
+  const conDeuda=S.clientes.filter(c=>c.deuda>0);
+  const deudaEl=document.getElementById('db-deuda');
+  if(deudaEl){
+    if(conDeuda.length>0){
+      const totalDeuda=conDeuda.reduce((s,c)=>s+c.deuda,0);
+      deudaEl.innerHTML=`⚠️ ${conDeuda.length} cliente${conDeuda.length>1?'s':''} con deuda pendiente — Total: <b>${fmt$(totalDeuda)}</b>`;
+      deudaEl.style.display='block';
+    } else {
+      deudaEl.style.display='none';
+    }
+  }
   const tbody=document.getElementById('db-turnos');
   const prox=S.turnos.filter(t=>t.fecha>=today).slice(0,8);
   if(!prox.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="ei">◷</div><p>Sin turnos próximos</p></div></td></tr>`;return;}
@@ -1451,7 +1471,7 @@ function renderClientes(){
     const inactivo=diasSinVenir>30&&c._ses>0;
     const packHtml=pk?`<div style="font-size:12px;font-weight:500;">${pk.nombre}</div><div style="margin-top:3px;background:var(--warm);border-radius:4px;height:5px;width:90px;"><div style="height:5px;border-radius:4px;width:${Math.min(100,Math.round(ses/pk.turnos*100))}%;background:${ses>=pk.turnos?'var(--danger)':ses>=pk.turnos-2?'#c09030':'var(--success)'};"></div></div><div style="font-size:11px;color:var(--stone);margin-top:2px;">${ses}/${pk.turnos}</div>`:'—';
     return `<tr>
-      <td><div class="flex"><div class="avatar">${ini}</div><div><div style="font-weight:500;">${c.nombre} ${inactivo?'<span style="background:#fce8e8;color:var(--danger);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:500;">+30 días</span>':''}</div>${c.cumple?`<div style="font-size:11px;color:var(--stone);">🎂 ${fmtF(c.cumple)}</div>`:''}</div></div></td>
+      <td><div class="flex"><div class="avatar">${ini}</div><div><div style="font-weight:500;">${c.nombre} ${inactivo?'<span style="background:#fce8e8;color:var(--danger);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:500;">+30 días</span>':''} ${c.deuda>0?'<span style="background:#fce8e8;color:var(--danger);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:500;">💸 Debe '+fmt$(c.deuda)+'</span>':''}</div>${c.cumple?`<div style="font-size:11px;color:var(--stone);">🎂 ${fmtF(c.cumple)}</div>`:''}</div></div></td>
       <td>${waNum?`<a href="https://wa.me/${waNum}" target="_blank" style="color:var(--success);text-decoration:none;">💬 ${c.telefono}</a>`:c.telefono||'—'}</td>
       <td>${packHtml}</td><td>${ses}</td>
       <td style="font-size:12px;">${proximo?fmtF(proximo.fecha)+' '+proximo.hora:'—'}</td>
