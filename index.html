@@ -2,9 +2,7 @@
 <html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+
 <meta name="version" content="1781357230">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Masoterapia Premium</title>
@@ -1314,18 +1312,17 @@ function _doSaveTurno(){
     save();
     renderAll();
     closeModal('turno');
-    // Google Calendar sync
+    // Google Calendar sync — update color on state change
     setTimeout(async ()=>{
       if(!gcalIsConnected()) return;
       const savedTurno = S.turnos.find(t=>t.id===obj.id);
       if(!savedTurno) return;
-      const isNew = !prevTurno;
-      if(isNew && estado === 'Pendiente'){
+      if(!getGcalId(savedTurno.id) && !savedTurno.gcalId){
         // New turno — add to GCal
         await gcalAddTurno(savedTurno);
-      } else if(estado === 'Cancelado'){
-        // Cancelled — remove from GCal
-        await gcalDeleteTurno(savedTurno);
+      } else {
+        // Existing turno — update color and status
+        await gcalUpdateTurno(savedTurno);
       }
     }, 500);
   } catch(e) {
@@ -1694,9 +1691,7 @@ function exportarPDF(){
   const rows=[...turnosIng,...movs].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const totalIng=rows.reduce((s,r)=>s+r.ing,0); const totalEgr=rows.reduce((s,r)=>s+r.egr,0);
   const html=`<html><head><meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+
 <meta name="version" content="1781357230"><style>body{font-family:sans-serif;font-size:12px;padding:20px;}h1{font-size:20px;margin-bottom:4px;}p{color:#888;margin-bottom:16px;}table{width:100%;border-collapse:collapse;}th{background:#2C1F15;color:#D4A843;padding:8px;text-align:left;font-size:11px;}td{padding:7px 8px;border-bottom:1px solid #eee;}.pos{color:green;font-weight:600;}.neg{color:red;font-weight:600;}.total{font-weight:700;background:#f8f5f0;}</style></head><body><h1>Reporte de Finanzas</h1><p>${MESES[parseInt(m)-1]} ${y} · Masoterapia Premium</p><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Origen</th><th>Ingreso</th><th>Gasto</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fmtF(r.fecha)}</td><td>${r.desc||'—'}</td><td>${r.cat}</td><td>${r.origen}</td><td class="pos">${r.ing?fmt$(r.ing):''}</td><td class="neg">${r.egr?fmt$(r.egr):''}</td></tr>`).join('')}<tr class="total"><td colspan="4"><b>TOTALES</b></td><td class="pos">${fmt$(totalIng)}</td><td class="neg">${fmt$(totalEgr)}</td></tr><tr class="total"><td colspan="4"><b>BALANCE NETO</b></td><td colspan="2" class="${totalIng-totalEgr>=0?'pos':'neg'}">${fmt$(totalIng-totalEgr)}</td></tr></tbody></table></body></html>`;
   const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
 }
@@ -1796,11 +1791,14 @@ function turnoToGCalEvent(t){
     start = { date: fecha };
     end = { date: fecha };
   }
+  // Colors: 5=banana(yellow/pending), 2=sage(green/confirmed), 11=tomato(red/cancelled)
+  const colorId = t.estado==='Confirmado' ? '2' : t.estado==='Cancelado' ? '11' : '5';
+  const estadoEmoji = t.estado==='Confirmado' ? '✅' : t.estado==='Cancelado' ? '❌' : '⏳';
   return {
-    summary: '💆 ' + t.clienteNombre + ' — ' + t.servicio,
-    description: 'Turno pendiente. Total: $' + (t.total||0) + (t.notas ? '\nNotas: '+t.notas : ''),
+    summary: estadoEmoji + ' ' + t.clienteNombre + ' — ' + t.servicio,
+    description: 'Estado: ' + (t.estado||'Pendiente') + '\nTotal: $' + (t.total||0) + (t.notas ? '\nNotas: '+t.notas : ''),
     start, end,
-    colorId: '5', // banana yellow for pending
+    colorId,
     reminders: { useDefault: false, overrides: [{ method:'popup', minutes:60 }] }
   };
 }
@@ -1816,6 +1814,18 @@ async function gcalAddTurno(turno){
   }
 }
 
+
+async function gcalUpdateTurno(turno){
+  if(!gcalIsConnected()) return;
+  const gcalId = getGcalId(turno.id) || turno.gcalId;
+  if(!gcalId){
+    // No existing event — add it
+    await gcalAddTurno(turno);
+    return;
+  }
+  const event = turnoToGCalEvent(turno);
+  await gcalRequest('PUT', 'https://www.googleapis.com/calendar/v3/calendars/primary/events/' + gcalId, event);
+}
 async function gcalDeleteTurno(turno){
   if(!gcalIsConnected() || !turno.gcalId) return;
   await gcalRequest('DELETE', 'https://www.googleapis.com/calendar/v3/calendars/primary/events/' + turno.gcalId);
@@ -1825,18 +1835,18 @@ async function gcalDeleteTurno(turno){
 
 async function sincronizarTodosPendientes(){
   if(!gcalIsConnected()){ alert('Conectá Google Calendar primero'); return; }
-  const pendientes = S.turnos.filter(t=>t.estado==='Pendiente'&&!getGcalId(t.id)&&!t._gcalSyncing);
-  if(!pendientes.length){ alert('No hay turnos pendientes sin sincronizar'); return; }
+  const sinSync = S.turnos.filter(t=>!getGcalId(t.id)&&!t.gcalId&&!t._gcalSyncing);
+  if(!sinSync.length){ alert('No hay turnos sin sincronizar'); return; }
   setSyncStatus('syncing', 'Sincronizando Calendar...');
   // Mark all as syncing to prevent double-sync
-  pendientes.forEach(t=>{ const idx=S.turnos.findIndex(x=>x.id===t.id); if(idx>=0) S.turnos[idx]._gcalSyncing=true; });
-  for(const t of pendientes){
+  sinSync.forEach(t=>{ const idx=S.turnos.findIndex(x=>x.id===t.id); if(idx>=0) S.turnos[idx]._gcalSyncing=true; });
+  for(const t of sinSync){
     await gcalAddTurno(t);
     const idx=S.turnos.findIndex(x=>x.id===t.id);
     if(idx>=0) delete S.turnos[idx]._gcalSyncing;
   }
   setSyncStatus('ok', 'Calendar sincronizado ✓');
-  alert('✅ ' + pendientes.length + ' turno(s) agregados a Google Calendar');
+  alert('✅ ' + sinSync.length + ' turno(s) sincronizados con Google Calendar');
 }
 
 window.addEventListener('load', ()=>{
