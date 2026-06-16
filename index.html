@@ -120,6 +120,7 @@ textarea{resize:vertical;min-height:72px;}
 .modal-overlay.open{display:flex;}
 .modal{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow-lg);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;animation:slideUp .25s ease;}
 @keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes slideUpMobile{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .modal-header{padding:20px 24px 14px;border-bottom:1px solid var(--warm);display:flex;align-items:center;justify-content:space-between;}
 .modal-header h3{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;}
 .modal-footer{padding:14px 24px;border-top:1px solid var(--warm);display:flex;gap:10px;justify-content:flex-end;}
@@ -158,7 +159,7 @@ textarea{resize:vertical;min-height:72px;}
 .section.active{display:block;}
 
 /* MOBILE */
-.menu-toggle{display:none;position:fixed;top:10px;left:10px;z-index:300;background:#1a110a;color:var(--accent-light);border:none;border-radius:10px;padding:8px 11px;font-size:16px;cursor:pointer;}
+.menu-toggle{display:none;position:fixed;top:8px;left:8px;z-index:300;background:#1a110a;color:var(--accent-light);border:none;border-radius:10px;padding:7px 10px;font-size:15px;cursor:pointer;}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99;}
 
 /* UTILS */
@@ -227,7 +228,7 @@ textarea{resize:vertical;min-height:72px;}
   .sidebar.open{transform:translateX(0);}
   .sidebar-overlay.open{display:block;}
   .menu-toggle{display:block;}
-  .main{margin-left:0;padding:10px;padding-top:60px;width:100%;overflow-x:hidden;}
+  .main{margin-left:0;padding:10px;padding-top:56px;width:100%;overflow-x:hidden;}
 
   /* PREVENT OVERFLOW */
   body,html{overflow-x:hidden;max-width:100vw;}
@@ -268,7 +269,7 @@ textarea{resize:vertical;min-height:72px;}
   .topbar select{font-size:13px;padding:6px 8px;}
 
   /* MODAL */
-  .modal{max-width:100%;margin:0;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;right:0;max-height:92vh;}
+  .modal{max-width:100%!important;margin:0;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;right:0;max-height:92vh;animation:slideUpMobile .25s ease;}
   .modal-overlay{align-items:flex-end;padding:0;}
 
   /* SYNC + SEARCH BUTTONS — move below to avoid overlap */
@@ -361,7 +362,7 @@ textarea{resize:vertical;min-height:72px;}
 
   <!-- HOY -->
   <div style="margin-bottom:20px;">
-    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--stone);margin-bottom:12px;">HOY</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;"><div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--stone);">HOY</div><div id="qv-totales" style="font-size:13px;"></div></div>
     <div id="qv-hoy"></div>
   </div>
 
@@ -397,6 +398,7 @@ textarea{resize:vertical;min-height:72px;}
       <div class="gb-item"><div class="label">Ingresos</div><div class="val pos" id="db-ing">$0</div></div>
       <div class="gb-item"><div class="label">Gastos</div><div class="val neg" id="db-egr">$0</div></div>
       <div class="gb-item"><div class="label">Turnos hoy</div><div class="val" id="db-hoy">0</div></div>
+      <div class="gb-item"><div class="label">Turnos mes</div><div class="val" id="db-mes-count">0</div></div>
       <div class="gb-item"><div class="label">Clientes</div><div class="val" id="db-cli">0</div></div>
     </div>
   </div>
@@ -444,6 +446,7 @@ textarea{resize:vertical;min-height:72px;}
       <th onclick="sortTurnos('clienteNombre')" style="cursor:pointer;">Cliente <span id="sort-clienteNombre">↕</span></th>
       <th onclick="sortTurnos('servicio')" style="cursor:pointer;">Servicio <span id="sort-servicio">↕</span></th>
       <th>Notas</th>
+      <th>Pago</th>
       <th onclick="sortTurnos('total')" style="cursor:pointer;">Total <span id="sort-total">↕</span></th>
       <th onclick="sortTurnos('estado')" style="cursor:pointer;">Estado <span id="sort-estado">↕</span></th>
       <th></th>
@@ -665,6 +668,15 @@ textarea{resize:vertical;min-height:72px;}
       <div class="form-group"><label>Descuento (%)</label><input type="number" id="t-desc" placeholder="0" oninput="calcTotal()" onchange="calcTotal()" onblur="calcTotal()"></div>
       <div class="form-group"><label>Total ($)</label><input type="number" id="t-total" placeholder="0"></div>
       <div class="form-group"><label>Estado</label><select id="t-estado"><option>Pendiente</option><option>Confirmado</option><option>Cancelado</option></select></div>
+      <div class="form-group"><label>Método de pago</label>
+        <select id="t-pago">
+          <option value="">Sin especificar</option>
+          <option value="Efectivo">💵 Efectivo</option>
+          <option value="Transferencia">📱 Transferencia</option>
+          <option value="Débito">💳 Débito</option>
+          <option value="Crédito">💳 Crédito</option>
+        </select>
+      </div>
       <div class="form-group full"><label>Notas del turno</label><textarea id="t-notas" placeholder="Preferencias, zona a trabajar, observaciones..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('turno')">Cancelar</button><button class="btn btn-primary" onclick="saveTurno()">Guardar</button></div>
@@ -848,6 +860,11 @@ function renderQuickView(){
   const hoy=S.turnos.filter(t=>t.fecha===today).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
   const manana=S.turnos.filter(t=>t.fecha===tomorrow).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
 
+  // Total del día
+  const totalHoy=hoy.filter(t=>t.estado==='Confirmado').reduce((s,t)=>s+t.total,0);
+  const totalPend=hoy.filter(t=>t.estado==='Pendiente').reduce((s,t)=>s+t.total,0);
+  const qvTotales=document.getElementById('qv-totales');
+  if(qvTotales) qvTotales.innerHTML=`<span style="color:var(--success);font-weight:600;">${fmt$(totalHoy)} cobrado</span>${totalPend?' · <span style="color:var(--accent);">'+fmt$(totalPend)+' pendiente</span>':''}`;
   const qvHoy=document.getElementById('qv-hoy');
   qvHoy.innerHTML=hoy.length?hoy.map(turnoCard).join(''):`<div style="color:var(--stone);font-size:14px;padding:16px;background:var(--white);border-radius:14px;text-align:center;">Sin turnos hoy 🌿</div>`;
 
@@ -1032,6 +1049,7 @@ function openModal(type,id){
       document.getElementById('pack-info-turno').style.display='none';
       document.getElementById('tipo-sesion-group').style.display='none';
       document.getElementById('t-tipo-sesion').value='pack';
+      document.getElementById('t-pago').value='';
       document.getElementById('t-servicio').onchange=onServicioChange;
     }
   }
@@ -1279,7 +1297,8 @@ function _doSaveTurno(){
     const obj = {
       id: tid || uid(),
       fecha, hora, clienteId: cid, clienteNombre, servicio,
-      precio, descuento, total, estado, notas
+      precio, descuento, total, estado, notas,
+      pago: document.getElementById('t-pago').value
     };
 
     // Save turno
@@ -1373,6 +1392,7 @@ function renderDashboard(){
   document.getElementById('db-ing').textContent=fmt$(mi);
   document.getElementById('db-egr').textContent=fmt$(me);
   document.getElementById('db-hoy').textContent=S.turnos.filter(t=>t.fecha===today).length;
+  document.getElementById('db-mes-count').textContent=S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').length;
   document.getElementById('db-cli').textContent=S.clientes.length;
   const meta=ajustes.meta||0;
   if(meta>0){ const pct=Math.min(100,Math.round((mi/meta)*100)); document.getElementById('meta-bar').style.width=pct+'%'; document.getElementById('meta-txt').textContent='Meta: '+fmt$(meta)+' · '+pct+'% alcanzado'; }
@@ -1401,7 +1421,7 @@ function renderTurnos(){
   });
   const tbody=document.getElementById('tTurnos');
   if(!list.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="ei">◷</div><p>Sin turnos</p></div></td></tr>`;return;}
-  tbody.innerHTML=list.map(t=>`<tr><td>${fmtF(t.fecha)}</td><td>${t.hora||'—'}</td><td>${t.clienteNombre}</td><td>${t.servicio}</td><td style="max-width:120px;font-size:12px;color:var(--stone);">${t.notas||'—'}</td><td>${fmt$(t.total)}</td><td><span class="badge badge-${bCls(t.estado)}">${t.estado}</span></td><td><button class="btn btn-secondary btn-sm btn-icon" onclick="openModal('turno','${t.id}')">✎</button><button class="btn btn-danger btn-sm btn-icon" onclick="delTurno('${t.id}')">✕</button></td></tr>`).join('');
+  tbody.innerHTML=list.map(t=>`<tr><td>${fmtF(t.fecha)}</td><td>${t.hora||'—'}</td><td>${t.clienteNombre}</td><td>${t.servicio}</td><td style="max-width:120px;font-size:12px;color:var(--stone);">${t.notas||'—'}</td><td style="font-size:12px;">${t.pago||'—'}</td><td>${fmt$(t.total)}</td><td><span class="badge badge-${bCls(t.estado)}">${t.estado}</span></td><td><button class="btn btn-secondary btn-sm btn-icon" onclick="openModal('turno','${t.id}')">✎</button><button class="btn btn-danger btn-sm btn-icon" onclick="delTurno('${t.id}')">✕</button></td></tr>`).join('');
 }
 
 // ── RENDER CLIENTES ─────────────────────────────────────────────
