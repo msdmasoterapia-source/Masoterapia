@@ -1320,6 +1320,22 @@ function _doSaveTurno(){
     // Get previous state BEFORE any changes
     const prevTurno = tid ? S.turnos.find(t => t.id === tid) : null;
     const wasConfirmed = prevTurno && prevTurno.estado === 'Confirmado';
+
+    // Si confirma por primera vez, preguntar si pagó
+    if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0){
+      const pagado = confirm('¿El cliente pagó el total de '+fmt$(obj.total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
+      if(!pagado){
+        const cuanto = parseFloat(prompt('¿Cuánto pagó? (0 si no pagó nada)', '0'))||0;
+        const deuda = obj.total - cuanto;
+        if(deuda > 0){
+          const cIdx = S.clientes.findIndex(c=>c.id===obj.clienteId);
+          if(cIdx>=0){
+            S.clientes[cIdx].deuda = (S.clientes[cIdx].deuda||0) + deuda;
+            S.clientes[cIdx].deudaMotivo = 'Turno '+obj.fecha+' — debe '+fmt$(deuda);
+          }
+        }
+      }
+    }
     const isNowConfirmed = estado === 'Confirmado';
 
     // Build turno object
