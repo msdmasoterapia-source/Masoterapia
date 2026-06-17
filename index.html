@@ -1306,25 +1306,6 @@ function _doSaveTurno(){
     let total = parseFloat(document.getElementById('t-total').value) || 0;
     if(precio > 0 && total === 0) total = precio * (1 - descuento/100);
     const estado = document.getElementById('t-estado').value;
-    // If confirming, ask about payment
-    if(estado === 'Confirmado' && (!prevTurno || prevTurno.estado !== 'Confirmado')){
-      const total = parseFloat(document.getElementById('t-total').value)||0;
-      if(total > 0){
-        const pagoCopleto = confirm('¿El cliente pagó el total de '+fmt$(total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
-        if(!pagoCopleto){
-          const pagado = parseFloat(prompt('¿Cuánto pagó? (dejá en 0 si no pagó nada)', '0'))||0;
-          const deuda = total - pagado;
-          if(deuda > 0){
-            // Update client debt
-            const cIdx = S.clientes.findIndex(c=>c.id===cid);
-            if(cIdx>=0){
-              S.clientes[cIdx].deuda = (S.clientes[cIdx].deuda||0) + deuda;
-              S.clientes[cIdx].deudaMotivo = 'Turno '+fecha+' — debe '+fmt$(deuda);
-            }
-          }
-        }
-      }
-    }
     const cid = document.getElementById('t-cliente').value;
     const hora = document.getElementById('t-hora').value;
     const notas = document.getElementById('t-notas').value;
