@@ -907,6 +907,17 @@ function renderListaPacks(){ const el=document.getElementById('lista-packs'); if
 
 
 // ── FRECUENCIA ─────────────────────────────────────────────────
+
+function saldarDeuda(cid){
+  const c=S.clientes.find(x=>x.id===cid); if(!c) return;
+  if(!confirm('¿Marcar la deuda de '+c.nombre+' ('+fmt$(c.deuda)+') como saldada?')) return;
+  const idx=S.clientes.findIndex(x=>x.id===cid);
+  if(idx>=0){ S.clientes[idx].deuda=0; S.clientes[idx].deudaMotivo=''; }
+  save(); renderAll();
+  // Refresh ficha
+  document.getElementById('ficha-content').innerHTML='';
+  abrirFicha(cid);
+}
 function calcFrecuenciaDesc(cid){
   if(!ajustes.frecuencia||!ajustes.frecuencia.activo) return null;
   const reglas=(ajustes.frecuencia.reglas||[]).sort((a,b)=>b.semanas-a.semanas);
@@ -1141,7 +1152,7 @@ function abrirFicha(cid){
         <p>${c.telefono?`📞 ${c.telefono}`:'Sin teléfono'} ${c.cumple?'· 🎂 '+fmtF(c.cumple):''}</p>
         <p style="margin-top:4px;">${pack?'Pack: '+pack.nombre+' · '+ses+'/'+pack.turnos+' sesiones':'Sin pack'}</p>
         ${c.obs?`<p style="margin-top:4px;font-size:12px;color:var(--stone);">${c.obs}</p>`:''}
-        ${c.deuda>0?`<p style="margin-top:6px;background:#fce8e8;color:var(--danger);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500;">💸 Deuda: ${fmt$(c.deuda)}${c.deudaMotivo?' — '+c.deudaMotivo:''}</p>`:''}
+        ${c.deuda>0?`<p style="margin-top:6px;background:#fce8e8;color:var(--danger);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:space-between;"><span>💸 Deuda: ${fmt$(c.deuda)}${c.deudaMotivo?' — '+c.deudaMotivo:''}</span><button onclick="saldarDeuda('${c.id}')" style="background:var(--success);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-left:8px;">✓ Saldar</button></p>`:''}
       </div>
       ${waNum?`<a href="https://wa.me/${waNum}" target="_blank" class="btn btn-success btn-sm" style="margin-left:auto;">💬 WhatsApp</a>`:''}
     </div>
@@ -1221,6 +1232,16 @@ function getClientPackInfo(cid){
 function onClienteChangeTurno(){
   const cid=document.getElementById('t-cliente').value;
   const info=getClientPackInfo(cid);
+  // Show deuda warning
+  const cliente=S.clientes.find(c=>c.id===cid);
+  if(cliente&&cliente.deuda>0){
+    const pi=document.getElementById('pack-info-turno');
+    pi.style.background='rgba(168,92,92,.12)';
+    pi.style.color='var(--danger)';
+    pi.innerHTML='💸 Este cliente tiene una deuda de <b>'+fmt$(cliente.deuda)+'</b>'+(cliente.deudaMotivo?' — '+cliente.deudaMotivo:'');
+    pi.style.display='block';
+    // Still check pack after showing deuda
+  }
   const pi=document.getElementById('pack-info-turno');
   const tipoGroup=document.getElementById('tipo-sesion-group');
   const tipoSel=document.getElementById('t-tipo-sesion');
@@ -1285,6 +1306,25 @@ function _doSaveTurno(){
     let total = parseFloat(document.getElementById('t-total').value) || 0;
     if(precio > 0 && total === 0) total = precio * (1 - descuento/100);
     const estado = document.getElementById('t-estado').value;
+    // If confirming, ask about payment
+    if(estado === 'Confirmado' && (!prevTurno || prevTurno.estado !== 'Confirmado')){
+      const total = parseFloat(document.getElementById('t-total').value)||0;
+      if(total > 0){
+        const pagoCopleto = confirm('¿El cliente pagó el total de '+fmt$(total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
+        if(!pagoCopleto){
+          const pagado = parseFloat(prompt('¿Cuánto pagó? (dejá en 0 si no pagó nada)', '0'))||0;
+          const deuda = total - pagado;
+          if(deuda > 0){
+            // Update client debt
+            const cIdx = S.clientes.findIndex(c=>c.id===cid);
+            if(cIdx>=0){
+              S.clientes[cIdx].deuda = (S.clientes[cIdx].deuda||0) + deuda;
+              S.clientes[cIdx].deudaMotivo = 'Turno '+fecha+' — debe '+fmt$(deuda);
+            }
+          }
+        }
+      }
+    }
     const cid = document.getElementById('t-cliente').value;
     const hora = document.getElementById('t-hora').value;
     const notas = document.getElementById('t-notas').value;
