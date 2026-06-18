@@ -986,6 +986,32 @@ function mesEgr(mes){ return S.movimientos.filter(m=>m.fecha.startsWith(mes)).re
 function totalIng(){ return S.movimientos.reduce((s,m)=>s+m.ingreso,0); }
 function totalEgr(){ return S.movimientos.reduce((s,m)=>s+m.egreso,0); }
 
+
+// ── MIGRACIÓN: crear movimientos para turnos confirmados sin auto-ingreso ──
+function migrarTurnosSinIngreso(){
+  const autoIds = new Set(S.movimientos.filter(m=>m._turnoAutoId).map(m=>m._turnoAutoId));
+  const turnosSinIngreso = S.turnos.filter(t=>t.estado==='Confirmado'&&t.total>0&&!autoIds.has(t.id));
+  if(!turnosSinIngreso.length) return;
+  let cambios=false;
+  turnosSinIngreso.forEach(t=>{
+    // Check no duplicate exists with same date+amount
+    const existe=S.movimientos.find(m=>m.fecha===t.fecha&&m.ingreso===t.total&&m.desc&&m.desc.includes(t.clienteNombre));
+    if(!existe){
+      S.movimientos.push({
+        id:'auto_'+t.id, fecha:t.fecha, tipo:'ingreso', origen:'negocio',
+        categoria:'Sesión de masajes', desc:t.clienteNombre+' — '+t.servicio,
+        ingreso:t.total, egreso:0, _turnoAutoId:t.id
+      });
+      cambios=true;
+    }
+  });
+  if(cambios){
+    S.movimientos.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    save();
+    console.log('Migrados '+turnosSinIngreso.length+' turnos sin ingreso');
+  }
+}
+
 // ── INIT ────────────────────────────────────────────────────────
 (function(){
   const now=new Date(); calY=now.getFullYear(); calM=now.getMonth();
@@ -1018,6 +1044,8 @@ function totalEgr(){ return S.movimientos.reduce((s,m)=>s+m.egreso,0); }
   }
   setTimeout(hideSplash, 2500);
   programarNotificaciones();
+  // Migrate old confirmed turnos without auto-ingreso
+  setTimeout(migrarTurnosSinIngreso, 2000);
 })();
 
 function renderAll(){ renderDashboard();renderTurnos();renderClientes();renderMovimientos();renderReportes();renderAgenda();renderQuickView(); }
