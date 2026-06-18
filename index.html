@@ -981,9 +981,9 @@ function agregarCategoria(){ const v=document.getElementById('nueva-cat').value.
 function eliminarCategoria(cat){ if(!confirm('¿Eliminar?'))return; S.categorias=S.categorias.filter(c=>c!==cat); save(); populateCatSelect(); renderListaCats(); }
 
 // ── FINANZAS HELPERS ───────────────────────────────────────────
-function mesIng(mes){ return S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').reduce((s,t)=>s+t.total,0)+S.movimientos.filter(m=>m.fecha.startsWith(mes)).reduce((s,m)=>s+m.ingreso,0); }
+function mesIng(mes){ return S.movimientos.filter(m=>m.fecha.startsWith(mes)).reduce((s,m)=>s+m.ingreso,0); }
 function mesEgr(mes){ return S.movimientos.filter(m=>m.fecha.startsWith(mes)).reduce((s,m)=>s+m.egreso,0); }
-function totalIng(){ return S.turnos.filter(t=>t.estado==='Confirmado').reduce((s,t)=>s+t.total,0)+S.movimientos.reduce((s,m)=>s+m.ingreso,0); }
+function totalIng(){ return S.movimientos.reduce((s,m)=>s+m.ingreso,0); }
 function totalEgr(){ return S.movimientos.reduce((s,m)=>s+m.egreso,0); }
 
 // ── INIT ────────────────────────────────────────────────────────
@@ -1320,22 +1320,6 @@ function _doSaveTurno(){
     // Get previous state BEFORE any changes
     const prevTurno = tid ? S.turnos.find(t => t.id === tid) : null;
     const wasConfirmed = prevTurno && prevTurno.estado === 'Confirmado';
-
-    // Si confirma por primera vez, preguntar si pagó
-    if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0){
-      const pagado = confirm('¿El cliente pagó el total de '+fmt$(obj.total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
-      if(!pagado){
-        const cuanto = parseFloat(prompt('¿Cuánto pagó? (0 si no pagó nada)', '0'))||0;
-        const deuda = obj.total - cuanto;
-        if(deuda > 0){
-          const cIdx = S.clientes.findIndex(c=>c.id===obj.clienteId);
-          if(cIdx>=0){
-            S.clientes[cIdx].deuda = (S.clientes[cIdx].deuda||0) + deuda;
-            S.clientes[cIdx].deudaMotivo = 'Turno '+obj.fecha+' — debe '+fmt$(deuda);
-          }
-        }
-      }
-    }
     const isNowConfirmed = estado === 'Confirmado';
 
     // Build turno object
@@ -1373,6 +1357,21 @@ function _doSaveTurno(){
       }
     }
 
+    // Si confirma por primera vez, preguntar si pagó
+    if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0){
+      const pagado = confirm('¿El cliente pagó el total de '+fmt$(obj.total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
+      if(!pagado){
+        const cuanto = parseFloat(prompt('¿Cuánto pagó? (0 si no pagó nada)', '0'))||0;
+        const deuda = obj.total - cuanto;
+        if(deuda > 0){
+          const cIdx = S.clientes.findIndex(c=>c.id===obj.clienteId);
+          if(cIdx>=0){
+            S.clientes[cIdx].deuda = (S.clientes[cIdx].deuda||0) + deuda;
+            S.clientes[cIdx].deudaMotivo = 'Turno '+obj.fecha+' — debe '+fmt$(deuda);
+          }
+        }
+      }
+    }
     save();
     renderAll();
     closeModal('turno');
@@ -1540,7 +1539,7 @@ function renderMovimientos(){
 // ── RENDER REPORTES ─────────────────────────────────────────────
 function renderReportes(){
   const mes=thisMes();
-  const ingNeg=S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').reduce((s,t)=>s+t.total,0)+S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.ingreso,0);
+  const ingNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.ingreso,0);
   const ingPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal').reduce((s,m)=>s+m.ingreso,0);
   const egrNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.egreso,0);
   const egrPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal').reduce((s,m)=>s+m.egreso,0);
@@ -1568,7 +1567,7 @@ function renderDashCharts(){
   destroyChart('chartBarras');
   charts['chartBarras']=new Chart(document.getElementById('chartBarras').getContext('2d'),{type:'bar',data:{labels,datasets:[{label:'Ingresos',data:dataIng,backgroundColor:'rgba(92,138,107,.7)',borderRadius:6},{label:'Gastos',data:dataEgr,backgroundColor:'rgba(168,92,92,.6)',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(0,0,0,.05)'}}}}});
   const mes=thisMes();
-  const ingNeg=S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').reduce((s,t)=>s+t.total,0)+S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
+  const ingNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
   const ingPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
   const egrNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.egreso>0).reduce((s,m)=>s+m.egreso,0);
   const egrPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal'&&m.egreso>0).reduce((s,m)=>s+m.egreso,0);
@@ -1763,9 +1762,7 @@ function importarDatos(e){ const file=e.target.files[0]; if(!file) return; const
 
 function exportarPDF(){
   const mes=thisMes(); const [y,m]=mes.split('-');
-  const turnosIng=S.turnos.filter(t=>t.estado==='Confirmado'&&t.fecha.startsWith(mes)).map(t=>({fecha:t.fecha,desc:t.clienteNombre+' — '+t.servicio,cat:'Sesión de masajes',origen:'negocio',ing:t.total,egr:0}));
-  const movs=S.movimientos.filter(mv=>mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso}));
-  const rows=[...turnosIng,...movs].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const rows=S.movimientos.filter(mv=>mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc||mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const totalIng=rows.reduce((s,r)=>s+r.ing,0); const totalEgr=rows.reduce((s,r)=>s+r.egr,0);
   const html=`<html><head><meta charset="UTF-8">
 
