@@ -87,10 +87,10 @@ table{width:100%;border-collapse:collapse;}
 th{padding:11px 14px;text-align:left;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--stone);background:var(--cream);font-weight:500;}
 td{padding:13px 14px;font-size:14px;border-top:1px solid var(--warm);vertical-align:middle;}
 tr:hover td{background:rgba(200,180,160,.08);}
-.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;}
-.badge-ok{background:#e8f4ed;color:var(--success);}
-.badge-pend{background:#fef3e2;color:#a07020;}
-.badge-cancel{background:#fce8e8;color:var(--danger);}
+.badge{display:inline-block;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.3px;}
+.badge-ok{background:#d4edda;color:#2d6a4f;border:1px solid #b7dfc5;}
+.badge-pend{background:#fff3cd;color:#856404;border:1px solid #ffd970;}
+.badge-cancel{background:#fce8e8;color:#842029;border:1px solid #f5c6cb;}
 .tag-negocio{background:rgba(184,134,11,.15);color:var(--accent);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:500;}
 .tag-personal{background:rgba(107,91,158,.15);color:var(--personal);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:500;}
 
@@ -1454,6 +1454,19 @@ function delTurno(id){
   save(); renderAll();
 }
 function delCliente(id){ if(!confirm('¿Eliminar cliente?'))return; S.clientes=S.clientes.filter(c=>c.id!==id); save();renderAll(); }
+
+function editMov(id){
+  const m=S.movimientos.find(x=>x.id===id); if(!m) return;
+  document.getElementById('m-id').value=m.id;
+  document.getElementById('m-fecha').value=m.fecha;
+  document.getElementById('m-tipo').value=m.ingreso>0?'ingreso':'egreso';
+  document.getElementById('m-origen').value=m.origen||'negocio';
+  populateCatSelect();
+  document.getElementById('m-cat').value=m.categoria||'';
+  document.getElementById('m-desc').value=m.desc||'';
+  document.getElementById('m-monto').value=m.ingreso>0?m.ingreso:m.egreso;
+  openModal('movimiento');
+}
 function delMov(id){ if(!confirm('¿Eliminar?'))return; S.movimientos=S.movimientos.filter(m=>m.id!==id); save();renderAll(); }
 
 // ── RENDER DASHBOARD ────────────────────────────────────────────
@@ -1561,7 +1574,7 @@ function renderMovimientos(){
   else if(f==='egreso') combined=combined.filter(m=>m.egreso>0);
   const tbody=document.getElementById('tMovimientos');
   if(!combined.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty"><div class="ei">◈</div><p>Sin registros</p></div></td></tr>`;return;}
-  tbody.innerHTML=combined.map(m=>`<tr><td>${fmtF(m.fecha)}</td><td>${m.desc||'—'}</td><td>${m.categoria||'—'}</td><td><span class="${m.origen==='personal'?'tag-personal':'tag-negocio'}">${m.origen}</span></td><td class="${m.ingreso?'amount-pos':''}">${m.ingreso?fmt$(m.ingreso):'—'}</td><td class="${m.egreso?'amount-neg':''}">${m.egreso?fmt$(m.egreso):'—'}</td><td>${m._turno?'':'<button class="btn btn-danger btn-sm btn-icon" onclick="delMov(\''+m.id+'\')">✕</button>'}</td></tr>`).join('');
+  tbody.innerHTML=combined.map(m=>`<tr><td>${fmtF(m.fecha)}</td><td>${m.desc||'—'}</td><td>${m.categoria||'—'}</td><td><span class="${m.origen==='personal'?'tag-personal':'tag-negocio'}">${m.origen}</span></td><td class="${m.ingreso?'amount-pos':''}">${m.ingreso?fmt$(m.ingreso):'—'}</td><td class="${m.egreso?'amount-neg':''}">${m.egreso?fmt$(m.egreso):'—'}</td><td><div style="display:flex;gap:4px;">${m._turno?'':'<button class="btn btn-secondary btn-sm btn-icon" onclick="editMov(\''+m.id+'\')">✎</button><button class="btn btn-danger btn-sm btn-icon" onclick="delMov(\''+m.id+'\')">✕</button>'}</div></td></tr>`).join('');
 }
 
 // ── RENDER REPORTES ─────────────────────────────────────────────
