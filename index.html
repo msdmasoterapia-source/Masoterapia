@@ -665,6 +665,7 @@ textarea{resize:vertical;min-height:72px;}
           <option value="suelta">Sesión suelta (sin descuento)</option>
         </select>
       </div>
+      <div class="form-group full"><div id="deuda-info-turno" style="display:none;background:rgba(168,92,92,.12);color:var(--danger);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:500;margin-bottom:6px;"></div></div>
       <div class="form-group full"><div id="pack-info-turno" style="display:none;background:rgba(92,138,107,.12);color:var(--success);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:500;"></div></div>
       <div class="form-group"><label>Precio base ($)</label><input type="number" id="t-precio" placeholder="0" oninput="calcTotal()" onchange="calcTotal()" onblur="calcTotal()"></div>
       <div class="form-group"><label>Descuento (%)</label><input type="number" id="t-desc" placeholder="0" oninput="calcTotal()" onchange="calcTotal()" onblur="calcTotal()"></div>
@@ -839,9 +840,9 @@ function sortTurnos(col){
 // ── QUICK VIEW ────────────────────────────────────────────────
 function renderQuickView(){
   const now=new Date();
-  const today=now;
+  const today=localDate(now);
   const tom=new Date(now); tom.setDate(tom.getDate()+1);
-  const tomorrow=tom;
+  const tomorrow=localDate(tom);
 
   document.getElementById('qv-fecha').textContent=now.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
@@ -869,8 +870,8 @@ function renderQuickView(){
     </div>`;
   }
 
-  const hoy=S.turnos.filter(t=>t.fecha===today).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
-  const manana=S.turnos.filter(t=>t.fecha===tomorrow).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+  const hoy=S.turnos.filter(t=>t.fecha===today&&t.estado!=='Cancelado').sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+  const manana=S.turnos.filter(t=>t.fecha===tomorrow&&t.estado!=='Cancelado').sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
 
   // Total del día
   const totalHoy=hoy.filter(t=>t.estado==='Confirmado').reduce((s,t)=>s+t.total,0);
@@ -1120,6 +1121,7 @@ function openModal(type,id){
       ['t-id','t-hora','t-servicio','t-precio','t-desc','t-total','t-notas'].forEach(i=>document.getElementById(i).value='');
       document.getElementById('t-estado').value='Pendiente'; document.getElementById('t-fecha').value=localDate();
       document.getElementById('pack-info-turno').style.display='none';
+      const di=document.getElementById('deuda-info-turno'); if(di) di.style.display='none';
       document.getElementById('tipo-sesion-group').style.display='none';
       document.getElementById('t-tipo-sesion').value='pack';
       document.getElementById('t-pago').value='';
@@ -1292,12 +1294,14 @@ function onClienteChangeTurno(){
   // Show deuda warning
   const cliente=S.clientes.find(c=>c.id===cid);
   if(cliente&&cliente.deuda>0){
-    const pi=document.getElementById('pack-info-turno');
-    pi.style.background='rgba(168,92,92,.12)';
-    pi.style.color='var(--danger)';
-    pi.innerHTML='💸 Este cliente tiene una deuda de <b>'+fmt$(cliente.deuda)+'</b>'+(cliente.deudaMotivo?' — '+cliente.deudaMotivo:'');
-    pi.style.display='block';
-    // Still check pack after showing deuda
+    const piDeuda=document.getElementById('deuda-info-turno');
+    if(piDeuda){
+      piDeuda.innerHTML='💸 Deuda pendiente: <b>'+fmt$(cliente.deuda)+'</b>'+(cliente.deudaMotivo?' — '+cliente.deudaMotivo:'');
+      piDeuda.style.display='block';
+    }
+  } else {
+    const piDeuda=document.getElementById('deuda-info-turno');
+    if(piDeuda) piDeuda.style.display='none';
   }
   const pi=document.getElementById('pack-info-turno');
   const tipoGroup=document.getElementById('tipo-sesion-group');
@@ -1429,6 +1433,21 @@ function _doSaveTurno(){
         }
       }
     }
+    // Preguntar si pagó al confirmar por primera vez
+    if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0){
+      const pagoCopleto = confirm('¿El cliente pagó el total de '+fmt$(obj.total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
+      if(!pagoCopleto){
+        const cuanto = parseFloat(prompt('¿Cuánto pagó? (0 si no pagó nada)', '0'))||0;
+        const deuda = obj.total - cuanto;
+        if(deuda > 0){
+          const cIdx = S.clientes.findIndex(c=>c.id===obj.clienteId);
+          if(cIdx>=0){
+            S.clientes[cIdx].deuda = (S.clientes[cIdx].deuda||0) + deuda;
+            S.clientes[cIdx].deudaMotivo = 'Turno '+obj.fecha+' — debe '+fmt$(deuda);
+          }
+        }
+      }
+    }
     save();
     renderAll();
     closeModal('turno');
@@ -1494,7 +1513,8 @@ function editMov(id){
   document.getElementById('m-cat').value=m.categoria||'';
   document.getElementById('m-desc').value=m.desc||'';
   document.getElementById('m-monto').value=m.ingreso>0?m.ingreso:m.egreso;
-  openModal('movimiento');
+  // Open modal directly without going through openModal() which resets fields
+  document.getElementById('modal-movimiento').classList.add('open');
 }
 function delMov(id){ if(!confirm('¿Eliminar?'))return; S.movimientos=S.movimientos.filter(m=>m.id!==id); save();renderAll(); }
 
@@ -1603,7 +1623,7 @@ function renderMovimientos(){
   else if(f==='egreso') combined=combined.filter(m=>m.egreso>0);
   const tbody=document.getElementById('tMovimientos');
   if(!combined.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty"><div class="ei">◈</div><p>Sin registros</p></div></td></tr>`;return;}
-  tbody.innerHTML=combined.map(m=>`<tr><td>${fmtF(m.fecha)}</td><td>${m.desc||'—'}</td><td>${m.categoria||'—'}</td><td><span class="${m.origen==='personal'?'tag-personal':'tag-negocio'}">${m.origen}</span></td><td class="${m.ingreso?'amount-pos':''}">${m.ingreso?fmt$(m.ingreso):'—'}</td><td class="${m.egreso?'amount-neg':''}">${m.egreso?fmt$(m.egreso):'—'}</td><td><div style="display:flex;gap:4px;">${m._turno?'':'<button class="btn btn-secondary btn-sm btn-icon" onclick="editMov(\''+m.id+'\')">✎</button><button class="btn btn-danger btn-sm btn-icon" onclick="delMov(\''+m.id+'\')">✕</button>'}</div></td></tr>`).join('');
+  tbody.innerHTML=combined.map(m=>`<tr><td>${fmtF(m.fecha)}</td><td>${m.desc||'—'}</td><td>${m.categoria||'—'}</td><td><span class="${m.origen==='personal'?'tag-personal':'tag-negocio'}">${m.origen}</span></td><td class="${m.ingreso?'amount-pos':''}">${m.ingreso?fmt$(m.ingreso):'—'}</td><td class="${m.egreso?'amount-neg':''}">${m.egreso?fmt$(m.egreso):'—'}</td><td><div style="display:flex;gap:4px;"><button class="btn btn-secondary btn-sm btn-icon" onclick="editMov('${m.id}')">✎</button><button class="btn btn-danger btn-sm btn-icon" onclick="delMov('${m.id}')">✕</button></div></td></tr>`).join('');
 }
 
 // ── RENDER REPORTES ─────────────────────────────────────────────
