@@ -889,7 +889,7 @@ function renderQuickView(){
   let semHtml='';
   for(let i=0;i<7;i++){
     const d=new Date(now); d.setDate(d.getDate()-d.getDay()+i);
-    const ds=d;
+    const ds=localDate(d);
     const ts=S.turnos.filter(t=>t.fecha===ds&&t.estado!=='Cancelado');
     const isToday=ds===today;
     semHtml+=`<div onclick="document.getElementById('t-fecha').value='${ds}';openModal('turno')" style="background:${isToday?'#1a110a':'var(--white)'};border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;box-shadow:var(--shadow);border:${isToday?'2px solid var(--accent-light)':'2px solid transparent'};">
