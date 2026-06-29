@@ -737,6 +737,7 @@ textarea{resize:vertical;min-height:72px;}
         <div class="form-group"><label>Turnos</label><input type="number" id="pk-turnos" placeholder="8" min="1"></div>
         <div class="form-group"><label>Dto %</label><input type="number" id="pk-desc" placeholder="15"></div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="pk-prepago" style="width:16px;height:16px;"> Pack prepago (el cliente paga todo al inicio, los turnos no preguntan pago)</label>
       <button class="btn btn-primary" onclick="agregarPack()" style="width:100%;justify-content:center;">Agregar pack</button>
       <div style="border-top:1px solid var(--warm);padding-top:14px;margin-top:14px;" id="lista-packs"></div>
     </div>
@@ -797,7 +798,7 @@ let calY, calM, calVista='mes';
 let charts = {};
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DIAS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-const COLORES=['#B8860B','#5C8A6B','#A85C5C','#4A7A9B','#6B5B9E','#9C7E68','#c07030'];
+const COLORES=['#B8860B','#D4A843','#5C8A6B','#3a8a5c','#A85C5C','#c44569','#4A7A9B','#2980b9','#6B5B9E','#8e44ad','#9C7E68','#c07030','#2C3E50','#16a085'];
 
 function save(){
   localStorage.setItem('masov2', JSON.stringify(S));
@@ -1319,8 +1320,11 @@ function onClienteChangeTurno(){
   if(info&&info.restantes>0&&tipoSel.value!=='suelta'){
     document.getElementById('t-desc').value=info.pack.descuento;
     pi.style.background='rgba(92,138,107,.12)'; pi.style.color='var(--success)';
-    pi.textContent='Pack: '+info.pack.nombre+' | Usados: '+info.usados+'/'+info.pack.turnos+' | Restantes: '+info.restantes;
+    // Show if pack is prepaid
+    const prepaid=info.pack.prepago?'💳 Pack prepago — ya pagado':'';
+    pi.textContent='Pack: '+info.pack.nombre+' | Usados: '+info.usados+'/'+info.pack.turnos+' | Restantes: '+info.restantes+(prepaid?' | '+prepaid:'');
     pi.style.display='block';
+    calcTotal();
   } else if(frecInfo&&frecInfo.descuento>0){
     // Show banner with confirm button instead of auto-applying
     pi.style.background='rgba(107,91,158,.12)'; pi.style.color='var(--personal)';
@@ -1434,7 +1438,14 @@ function _doSaveTurno(){
       }
     }
     // Preguntar si pagó al confirmar por primera vez
-    if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0){
+    // Skip if client has a prepago pack
+    const clientePack = obj.clienteId ? (() => {
+      const c = S.clientes.find(x=>x.id===obj.clienteId);
+      if(!c||!c.pack) return null;
+      return allPacks().find(p=>p.id===c.pack);
+    })() : null;
+    const esPrepago = clientePack && clientePack.prepago;
+    if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0 && !esPrepago){
       const pagoCopleto = confirm('¿El cliente pagó el total de '+fmt$(obj.total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
       if(!pagoCopleto){
         const cuanto = parseFloat(prompt('¿Cuánto pagó? (0 si no pagó nada)', '0'))||0;
