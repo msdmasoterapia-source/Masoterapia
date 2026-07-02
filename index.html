@@ -223,6 +223,9 @@ textarea{resize:vertical;min-height:72px;}
 }
 @media(max-width:700px){
   .qc-grid{grid-template-columns:1fr!important;}
+  .precios-grid{grid-template-columns:1fr!important;}
+  .frec-grid{grid-template-columns:1fr!important;}
+  .pm-grid{grid-template-columns:1fr!important;}
   /* LAYOUT */
   .sidebar{transform:translateX(-100%);}
   .sidebar.open{transform:translateX(0);}
@@ -579,7 +582,7 @@ textarea{resize:vertical;min-height:72px;}
         </label>
       </div>
       <div id="frecuenciaReglas" style="margin-bottom:12px;"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;" class="frec-grid">
         <div class="form-group">
           <label>Semanas seguidas</label>
           <input type="number" id="frec-sem" placeholder="Ej: 4" min="1">
@@ -597,12 +600,12 @@ textarea{resize:vertical;min-height:72px;}
     <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:16px;">Precios por servicio</h3>
       <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">Se completan solos al cargar el siguiente turno del mismo servicio.</p>
-      <div id="preciosServicios" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+      <div id="preciosServicios" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" class="precios-grid"></div>
     </div>
     <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:10px;">Pack mensual</h3>
       <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">El cliente paga una vez por mes y tiene X turnos incluidos con descuento.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;" class="pm-grid">
         <div class="form-group"><label>Nombre</label><input type="text" id="pm-nombre" placeholder="Pack mensual"></div>
         <div class="form-group"><label>Turnos/mes</label><input type="number" id="pm-turnos" placeholder="4" min="1"></div>
         <div class="form-group"><label>Descuento %</label><input type="number" id="pm-desc" placeholder="15"></div>
@@ -907,7 +910,7 @@ const DEFAULT_PACKS=[
   {id:'p1',nombre:'Sesión suelta',turnos:1,descuento:0},
   {id:'p2',nombre:'Pack 4 sesiones',turnos:4,descuento:10},
 ];
-function allPacks(){ return [...DEFAULT_PACKS,...S.packs.filter(p=>!DEFAULT_PACKS.find(d=>d.id===p.id))]; }
+function allPacks(){ const deleted=S.deletedDefaults||[]; return [...DEFAULT_PACKS.filter(p=>!deleted.includes(p.id)),...S.packs.filter(p=>!DEFAULT_PACKS.find(d=>d.id===p.id))]; }
 function populatePackSelect(selId,cur){ const sel=document.getElementById(selId); sel.innerHTML='<option value="">Sin pack</option>'; allPacks().forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' ('+p.turnos+' turnos, '+p.descuento+'% dto)';sel.appendChild(o);}); if(cur) sel.value=cur; }
 function onPackChange(){ const pid=document.getElementById('c-pack').value; const pack=allPacks().find(p=>p.id===pid); const cid=document.getElementById('c-id').value; const usados=cid?S.turnos.filter(t=>t.clienteId===cid&&t.estado==='Confirmado').length:0; if(pack){document.getElementById('c-desc').value=pack.descuento;document.getElementById('c-turnos-rest').value=Math.max(0,pack.turnos-usados);}else{document.getElementById('c-desc').value='';document.getElementById('c-turnos-rest').value='';} }
 function agregarPack(){ const n=document.getElementById('pk-nombre').value.trim(),t=parseInt(document.getElementById('pk-turnos').value)||0,d=parseInt(document.getElementById('pk-desc').value)||0; if(!n||!t){alert('Completá nombre y turnos');return;} S.packs.push({id:'cp'+uid(),nombre:n,turnos:t,descuento:d}); save(); renderListaPacks(); ['pk-nombre','pk-turnos','pk-desc'].forEach(i=>document.getElementById(i).value=''); populatePackSelect('c-pack',''); }
@@ -933,7 +936,15 @@ function actualizarPack(id){
   const btn=document.querySelector('[onclick*="actualizarPack"]');
   if(btn){ btn.textContent='Agregar pack'; btn.onclick=agregarPack; }
 }
-function eliminarPack(id){ if(!confirm('¿Eliminar pack?'))return; S.packs=S.packs.filter(p=>p.id!==id); save(); renderListaPacks(); populatePackSelect('c-pack',''); }
+function eliminarPack(id){
+  if(!confirm('¿Eliminar pack?'))return;
+  // Remove from custom packs
+  S.packs=S.packs.filter(p=>p.id!==id);
+  // Also override default packs by adding to a deletedDefaults list
+  if(!S.deletedDefaults) S.deletedDefaults=[];
+  if(DEFAULT_PACKS.find(p=>p.id===id)) S.deletedDefaults.push(id);
+  save(); renderListaPacks(); populatePackSelect('c-pack','');
+}
 function renderListaPacks(){ const el=document.getElementById('lista-packs'); if(!el)return; el.innerHTML=allPacks().map(p=>{const isDef=DEFAULT_PACKS.find(d=>d.id===p.id); return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--cream);border-radius:10px;margin-bottom:6px;font-size:13px;"><div><span style="font-weight:500;">${p.nombre}</span><span style="color:var(--stone);margin-left:8px;">${p.turnos} turnos · ${p.descuento}% dto</span></div><div style="display:flex;gap:6px;">${!isDef?`<button onclick="editarPack('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--clay);font-size:14px;">✎</button><button onclick="eliminarPack('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:16px;">✕</button>`:''}  </div></div>`; }).join(''); }
 
 
