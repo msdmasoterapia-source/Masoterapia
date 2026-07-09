@@ -223,9 +223,6 @@ textarea{resize:vertical;min-height:72px;}
 }
 @media(max-width:700px){
   .qc-grid{grid-template-columns:1fr!important;}
-  .precios-grid{grid-template-columns:1fr!important;}
-  .frec-grid{grid-template-columns:1fr!important;}
-  .pm-grid{grid-template-columns:1fr!important;}
   /* LAYOUT */
   .sidebar{transform:translateX(-100%);}
   .sidebar.open{transform:translateX(0);}
@@ -403,7 +400,6 @@ textarea{resize:vertical;min-height:72px;}
       <div class="gb-item"><div class="label">Turnos hoy</div><div class="val" id="db-hoy">0</div></div>
       <div class="gb-item"><div class="label">Turnos mes</div><div class="val" id="db-mes-count">0</div></div>
       <div class="gb-item"><div class="label">Clientes</div><div class="val" id="db-cli">0</div></div>
-      <div class="gb-item"><div class="label">vs mes ant.</div><div class="val" id="db-vs-ant" style="font-size:14px;">—</div></div>
     </div>
   </div>
   <div id="db-deuda" style="display:none;background:#fce8e8;color:var(--danger);border-radius:12px;padding:12px 18px;margin-bottom:16px;font-size:13px;cursor:pointer;" onclick="nav('clientes',document.querySelector('[onclick*=clientes]'))"></div>
@@ -463,7 +459,6 @@ textarea{resize:vertical;min-height:72px;}
 <div class="section" id="section-clientes">
   <div class="topbar"><div class="page-title">Clientes</div>
     <div class="flex">
-      <button class="btn btn-success btn-sm" onclick="exportarClientesPDF()">⬇ PDF clientes</button>
       <select id="sortClientes" onchange="renderClientes()" style="font-size:13px;padding:6px 10px;">
         <option value="nombre">A-Z</option>
         <option value="visitas">Más visitados</option>
@@ -584,7 +579,7 @@ textarea{resize:vertical;min-height:72px;}
         </label>
       </div>
       <div id="frecuenciaReglas" style="margin-bottom:12px;"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;" class="frec-grid">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;">
         <div class="form-group">
           <label>Semanas seguidas</label>
           <input type="number" id="frec-sem" placeholder="Ej: 4" min="1">
@@ -602,12 +597,12 @@ textarea{resize:vertical;min-height:72px;}
     <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:16px;">Precios por servicio</h3>
       <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">Se completan solos al cargar el siguiente turno del mismo servicio.</p>
-      <div id="preciosServicios" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" class="precios-grid"></div>
+      <div id="preciosServicios" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
     </div>
     <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:10px;">Pack mensual</h3>
       <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">El cliente paga una vez por mes y tiene X turnos incluidos con descuento.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;" class="pm-grid">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div class="form-group"><label>Nombre</label><input type="text" id="pm-nombre" placeholder="Pack mensual"></div>
         <div class="form-group"><label>Turnos/mes</label><input type="number" id="pm-turnos" placeholder="4" min="1"></div>
         <div class="form-group"><label>Descuento %</label><input type="number" id="pm-desc" placeholder="15"></div>
@@ -912,7 +907,7 @@ const DEFAULT_PACKS=[
   {id:'p1',nombre:'Sesión suelta',turnos:1,descuento:0},
   {id:'p2',nombre:'Pack 4 sesiones',turnos:4,descuento:10},
 ];
-function allPacks(){ const deleted=S.deletedDefaults||[]; return [...DEFAULT_PACKS.filter(p=>!deleted.includes(p.id)),...S.packs.filter(p=>!DEFAULT_PACKS.find(d=>d.id===p.id))]; }
+function allPacks(){ return [...DEFAULT_PACKS,...S.packs.filter(p=>!DEFAULT_PACKS.find(d=>d.id===p.id))]; }
 function populatePackSelect(selId,cur){ const sel=document.getElementById(selId); sel.innerHTML='<option value="">Sin pack</option>'; allPacks().forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' ('+p.turnos+' turnos, '+p.descuento+'% dto)';sel.appendChild(o);}); if(cur) sel.value=cur; }
 function onPackChange(){ const pid=document.getElementById('c-pack').value; const pack=allPacks().find(p=>p.id===pid); const cid=document.getElementById('c-id').value; const usados=cid?S.turnos.filter(t=>t.clienteId===cid&&t.estado==='Confirmado').length:0; if(pack){document.getElementById('c-desc').value=pack.descuento;document.getElementById('c-turnos-rest').value=Math.max(0,pack.turnos-usados);}else{document.getElementById('c-desc').value='';document.getElementById('c-turnos-rest').value='';} }
 function agregarPack(){ const n=document.getElementById('pk-nombre').value.trim(),t=parseInt(document.getElementById('pk-turnos').value)||0,d=parseInt(document.getElementById('pk-desc').value)||0; if(!n||!t){alert('Completá nombre y turnos');return;} S.packs.push({id:'cp'+uid(),nombre:n,turnos:t,descuento:d}); save(); renderListaPacks(); ['pk-nombre','pk-turnos','pk-desc'].forEach(i=>document.getElementById(i).value=''); populatePackSelect('c-pack',''); }
@@ -938,15 +933,7 @@ function actualizarPack(id){
   const btn=document.querySelector('[onclick*="actualizarPack"]');
   if(btn){ btn.textContent='Agregar pack'; btn.onclick=agregarPack; }
 }
-function eliminarPack(id){
-  if(!confirm('¿Eliminar pack?'))return;
-  // Remove from custom packs
-  S.packs=S.packs.filter(p=>p.id!==id);
-  // Also override default packs by adding to a deletedDefaults list
-  if(!S.deletedDefaults) S.deletedDefaults=[];
-  if(DEFAULT_PACKS.find(p=>p.id===id)) S.deletedDefaults.push(id);
-  save(); renderListaPacks(); populatePackSelect('c-pack','');
-}
+function eliminarPack(id){ if(!confirm('¿Eliminar pack?'))return; S.packs=S.packs.filter(p=>p.id!==id); save(); renderListaPacks(); populatePackSelect('c-pack',''); }
 function renderListaPacks(){ const el=document.getElementById('lista-packs'); if(!el)return; el.innerHTML=allPacks().map(p=>{const isDef=DEFAULT_PACKS.find(d=>d.id===p.id); return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--cream);border-radius:10px;margin-bottom:6px;font-size:13px;"><div><span style="font-weight:500;">${p.nombre}</span><span style="color:var(--stone);margin-left:8px;">${p.turnos} turnos · ${p.descuento}% dto</span></div><div style="display:flex;gap:6px;">${!isDef?`<button onclick="editarPack('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--clay);font-size:14px;">✎</button><button onclick="eliminarPack('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:16px;">✕</button>`:''}  </div></div>`; }).join(''); }
 
 
@@ -1551,12 +1538,6 @@ function renderDashboard(){
   document.getElementById('db-egr').textContent=fmt$(me);
   document.getElementById('db-hoy').textContent=S.turnos.filter(t=>t.fecha===today).length;
   document.getElementById('db-mes-count').textContent=S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').length;
-  // vs mes anterior
-  const now3=new Date();
-  const mesAnt2=`${now3.getMonth()===0?now3.getFullYear()-1:now3.getFullYear()}-${String(now3.getMonth()===0?12:now3.getMonth()).padStart(2,'0')}`;
-  const miAnt2=mesIng(mesAnt2);
-  const vsEl=document.getElementById('db-vs-ant');
-  if(vsEl&&miAnt2>0){const pct=Math.round(((mi-miAnt2)/miAnt2)*100);vsEl.textContent=(pct>=0?'▲ +':'▼ ')+pct+'%';vsEl.style.color=pct>=0?'#90EE90':'#FFB3B3';}
   document.getElementById('db-cli').textContent=S.clientes.length;
   const meta=ajustes.meta||0;
   if(meta>0){ const pct=Math.min(100,Math.round((mi/meta)*100)); document.getElementById('meta-bar').style.width=pct+'%'; document.getElementById('meta-txt').textContent='Meta: '+fmt$(meta)+' · '+pct+'% alcanzado'; }
@@ -1579,7 +1560,7 @@ function renderDashboard(){
     }
   }
   const tbody=document.getElementById('db-turnos');
-  const prox=S.turnos.filter(t=>t.fecha>=localDate()).slice(0,8);
+  const prox=S.turnos.filter(t=>t.fecha>=today).slice(0,8);
   if(!prox.length){tbody.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="ei">◷</div><p>Sin turnos próximos</p></div></td></tr>`;return;}
   tbody.innerHTML=prox.map(t=>`<tr><td>${fmtF(t.fecha)}</td><td>${t.hora||'—'}</td><td>${t.clienteNombre}</td><td>${t.servicio}</td><td>${fmt$(t.total)}</td><td><span class="badge badge-${bCls(t.estado)}">${t.estado}</span></td></tr>`).join('');
   setTimeout(renderDashCharts,30);
@@ -1746,7 +1727,7 @@ function renderCalendar(){
   DIAS.forEach(d=>{const el=document.createElement('div');el.className='cal-label';el.textContent=d;labRow.appendChild(el);}); grid.appendChild(labRow);
   const calBody=document.createElement('div'); calBody.className='cal-grid'; calBody.style.marginTop='3px';
   const first=new Date(calY,calM,1).getDay(),days=new Date(calY,calM+1,0).getDate(),prev=new Date(calY,calM,0).getDate();
-  const today2str=localDate(); let cells=[];
+  const today=new Date(); let cells=[];
   for(let i=first-1;i>=0;i--) cells.push({d:prev-i,cur:false});
   for(let i=1;i<=days;i++) cells.push({d:i,cur:true});
   while(cells.length%7!==0) cells.push({d:cells.length-first-days+1,cur:false});
@@ -1880,16 +1861,6 @@ function programarNotificaciones(){
 function exportarDatos(){ const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='masoterapia-backup-'+new Date()+'.json'; a.click(); }
 function importarDatos(e){ const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=ev=>{try{const data=JSON.parse(ev.target.result); if(!data.clientes||!data.turnos){alert('Archivo inválido');return;} if(!confirm('¿Importar? Reemplaza los datos actuales.'))return; S=data; if(!S.categorias)S.categorias=[]; if(!S.packs)S.packs=[]; if(!S.movimientos)S.movimientos=[]; save();renderAll();alert('✅ Datos importados');}catch(err){alert('Error: '+err.message);}}; r.readAsText(file); e.target.value=''; }
 
-
-function exportarClientesPDF(){
-  const rows=S.clientes.map(c=>{
-    const ses=S.turnos.filter(t=>t.clienteId===c.id&&t.estado==='Confirmado').length;
-    const pk=allPacks().find(p=>p.id===c.pack);
-    return `<tr><td>${c.nombre}</td><td>${c.telefono||'—'}</td><td>${pk?pk.nombre:'—'}</td><td>${ses}</td><td>${c.deuda>0?'$'+c.deuda:''}</td><td>${c.obs||''}</td></tr>`;
-  }).join('');
-  const html=`<html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;font-size:12px;padding:20px;}h1{font-size:18px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;}th{background:#2C1F15;color:#D4A843;padding:8px;text-align:left;font-size:11px;}td{padding:7px 8px;border-bottom:1px solid #eee;}.deuda{color:red;font-weight:600;}</style></head><body><h1>Listado de Clientes</h1><p>Masoterapia Premium · ${new Date().toLocaleDateString('es-AR')}</p><table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Pack</th><th>Sesiones</th><th>Deuda</th><th>Observaciones</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-  const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
-}
 function exportarPDF(){
   const mes=thisMes(); const [y,m]=mes.split('-');
   const rows=S.movimientos.filter(mv=>mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc||mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
