@@ -1755,7 +1755,7 @@ function renderCalendar(){
     const ts=ds?S.turnos.filter(t=>t.fecha===ds):[];
     const isBlocked=ds&&(ajustes.diasBloqueados||[]).includes(ds);
     const div=document.createElement('div');
-    div.className='cal-day'+(c.cur?'':' other')+(ds===todayStr2?' today':'')+(isBlocked?' blocked':'');
+    div.className='cal-day'+(c.cur?'':' other')+(ds===localDate()?' today':'')+(isBlocked?' blocked':'');
     const maxShow=2;
     const shown=ts.slice(0,maxShow);
     const extra=ts.length-maxShow;
