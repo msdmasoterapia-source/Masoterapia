@@ -423,7 +423,6 @@ textarea{resize:vertical;min-height:72px;}
     <div class="page-title">Agenda <span>mensual</span></div>
     <div class="flex">
       <button class="btn btn-secondary btn-sm" id="btnVistaMes" onclick="setVista('mes')">Mes</button>
-      <button class="btn btn-secondary btn-sm" id="btnVistaSem" onclick="setVista('semana')">Semana</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('turno')">+ Turno</button>
     </div>
   </div>
@@ -605,6 +604,11 @@ textarea{resize:vertical;min-height:72px;}
       <div id="preciosServicios" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" class="precios-grid"></div>
     </div>
     <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
+      <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:10px;">Packs de sesiones</h3>
+      <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">Editá o eliminá los packs existentes (incluidos los predeterminados).</p>
+      <button class="btn btn-primary" onclick="openModal('pack')" style="width:100%;justify-content:center;margin-bottom:20px;">✎ Gestionar packs</button>
+    </div>
+    <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:10px;">Pack mensual</h3>
       <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">El cliente paga una vez por mes y tiene X turnos incluidos con descuento.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;" class="pm-grid">
@@ -614,11 +618,7 @@ textarea{resize:vertical;min-height:72px;}
       </div>
       <button class="btn btn-primary" onclick="agregarPackMensual()" style="width:100%;justify-content:center;">Agregar pack mensual</button>
     </div>
-    <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
-      <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:16px;">Días bloqueados</h3>
-      <p style="font-size:13px;color:var(--stone);margin-bottom:12px;">Marcá los días que no atendés (se muestran rayados en la agenda).</p>
-      <div id="diasBloqueados" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-    </div>
+
   </div>
 </div>
 
@@ -1736,7 +1736,7 @@ function chPeriodo(d){
 }
 
 function renderAgenda(){
-  if(calVista==='semana') renderSemana(); else renderCalendar();
+  renderCalendar();
 }
 
 function renderCalendar(){
@@ -1753,7 +1753,7 @@ function renderCalendar(){
   cells.forEach(c=>{
     const ds=c.cur?`${calY}-${String(calM+1).padStart(2,'0')}-${String(c.d).padStart(2,'0')}`:'';
     const ts=ds?S.turnos.filter(t=>t.fecha===ds):[];
-    const isBlocked=ds&&(ajustes.diasBloqueados||[]).includes(ds);
+    const isBlocked=false;
     const div=document.createElement('div');
     div.className='cal-day'+(c.cur?'':' other')+(ds===localDate()?' today':'')+(isBlocked?' blocked':'');
     const maxShow=2;
