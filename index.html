@@ -1227,15 +1227,22 @@ function abrirFicha(cid){
         ${c.obs?`<p style="margin-top:4px;font-size:12px;color:var(--stone);">${c.obs}</p>`:''}
         ${c.deuda>0?`<p style="margin-top:6px;background:#fce8e8;color:var(--danger);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:space-between;"><span>💸 Deuda: ${fmt$(c.deuda)}${c.deudaMotivo?' — '+c.deudaMotivo:''}</span><button onclick="saldarDeuda('${c.id}')" style="background:var(--success);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-left:8px;">✓ Saldar</button></p>`:''}
       </div>
-      ${waNum?`<a href="https://wa.me/${waNum}" target="_blank" class="btn btn-success btn-sm" style="margin-left:auto;">💬 WhatsApp</a>`:''}
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        ${waNum?`<a href="https://wa.me/${waNum}" target="_blank" class="btn btn-success btn-sm">💬 WhatsApp</a>`:''}
+        <button class="btn btn-secondary btn-sm" onclick="exportarFichaPDF('${c.id}')">⬇ PDF</button>
+      </div>
     </div>
     ${proximo?`<div style="padding:12px 24px;background:rgba(92,138,107,.08);border-bottom:1px solid var(--warm);font-size:13px;"><b>Próximo turno:</b> ${fmtF(proximo.fecha)} ${proximo.hora||''} — ${proximo.servicio}</div>`:''}
     <div class="ficha-body">
       <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--stone);margin-bottom:12px;">Historial de turnos</div>
       ${turnos.length?turnos.map(t=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--warm);gap:12px;">
-          <div style="font-size:13px;"><b>${fmtF(t.fecha)}</b> ${t.hora||''} — ${t.servicio}<br>${t.notas?`<span style="font-size:11px;color:var(--stone);">📝 ${t.notas}</span>`:''}</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;"><span>${fmt$(t.total)}</span><span class="badge badge-${bCls(t.estado)}">${t.estado}</span></div>
+        <div style="padding:10px 0;border-bottom:1px solid var(--warm);">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div style="font-size:13px;"><b>${fmtF(t.fecha)}</b> ${t.hora||''} — ${t.servicio}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;"><span>${fmt$(t.total)}</span><span class="badge badge-${bCls(t.estado)}">${t.estado}</span></div>
+          </div>
+          ${t.notas?`<div style="font-size:11px;color:var(--stone);margin-top:4px;">📝 ${t.notas}</div>`:''}
+          ${t.resenia?`<div style="font-size:12px;color:var(--success);background:rgba(92,138,107,.08);border-radius:6px;padding:6px 8px;margin-top:6px;">✓ ${t.resenia}</div>`:''}
         </div>`).join(''):'<p style="color:var(--stone);font-size:13px;">Sin turnos registrados</p>'}
     </div>`;
 }
@@ -1458,6 +1465,14 @@ function _doSaveTurno(){
       return allPacks().find(p=>p.id===c.pack);
     })() : null;
     const esPrepago = clientePack && clientePack.prepago;
+    if(obj.estado === 'Confirmado' && !wasConfirmed){
+      const resenia = prompt('Reseña de la sesión (opcional):\nEj: Trabajé zona lumbar, buena evolución', obj.resenia||'');
+      if(resenia !== null && resenia.trim()){
+        const idx = S.turnos.findIndex(t=>t.id===obj.id);
+        if(idx>=0) S.turnos[idx].resenia = resenia.trim();
+        obj.resenia = resenia.trim();
+      }
+    }
     if(obj.estado === 'Confirmado' && !wasConfirmed && obj.total > 0 && !esPrepago){
       const pagoCopleto = confirm('¿El cliente pagó el total de '+fmt$(obj.total)+'?\n\nOK = Sí, pagó completo\nCancelar = No, tiene deuda');
       if(!pagoCopleto){
@@ -1881,6 +1896,15 @@ function exportarDatos(){ const blob=new Blob([JSON.stringify(S,null,2)],{type:'
 function importarDatos(e){ const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=ev=>{try{const data=JSON.parse(ev.target.result); if(!data.clientes||!data.turnos){alert('Archivo inválido');return;} if(!confirm('¿Importar? Reemplaza los datos actuales.'))return; S=data; if(!S.categorias)S.categorias=[]; if(!S.packs)S.packs=[]; if(!S.movimientos)S.movimientos=[]; save();renderAll();alert('✅ Datos importados');}catch(err){alert('Error: '+err.message);}}; r.readAsText(file); e.target.value=''; }
 
 
+
+function exportarFichaPDF(cid){
+  const c=S.clientes.find(x=>x.id===cid); if(!c) return;
+  const turnos=S.turnos.filter(t=>t.clienteId===cid).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const pk=allPacks().find(p=>p.id===c.pack);
+  const rows=turnos.map(t=>`<tr><td>${fmtF(t.fecha)}</td><td>${t.hora||'—'}</td><td>${t.servicio}</td><td>${fmt$(t.total)}</td><td>${t.estado}</td><td>${t.resenia||''}</td></tr>`).join('');
+  const html=`<html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;font-size:12px;padding:20px;}h1{font-size:20px;margin-bottom:2px;}p{color:#888;margin-bottom:16px;}table{width:100%;border-collapse:collapse;}th{background:#2C1F15;color:#D4A843;padding:8px;text-align:left;font-size:11px;}td{padding:7px 8px;border-bottom:1px solid #eee;vertical-align:top;}.info{background:#f8f5f0;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;}</style></head><body><h1>${c.nombre}</h1><p>Historial de sesiones · ${new Date().toLocaleDateString('es-AR')}</p><div class="info"><b>Teléfono:</b> ${c.telefono||'—'} ${pk?' · <b>Pack:</b> '+pk.nombre:''} ${c.deuda>0?' · <b>Deuda:</b> $'+c.deuda.toLocaleString('es-AR'):''}${c.obs?'<br><b>Obs:</b> '+c.obs:''}</div><table><thead><tr><th>Fecha</th><th>Hora</th><th>Servicio</th><th>Total</th><th>Estado</th><th>Reseña</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
+}
 function exportarClientesPDF(){
   const rows=S.clientes.map(c=>{
     const ses=S.turnos.filter(t=>t.clienteId===c.id&&t.estado==='Confirmado').length;
