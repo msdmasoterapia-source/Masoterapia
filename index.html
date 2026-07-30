@@ -670,6 +670,13 @@ textarea{resize:vertical;min-height:72px;}
           <option value="suelta">Sesión suelta (sin descuento)</option>
         </select>
       </div>
+      <div class="form-group" id="asignar-pack-group" style="display:none;">
+        <label>Asignar pack (opcional)</label>
+        <div class="flex" style="gap:6px;">
+          <select id="t-asignar-pack" style="flex:1;" onchange="onAsignarPackChange()"></select>
+          <button type="button" class="btn btn-secondary btn-icon" onclick="openModal('pack')" style="font-size:18px;padding:7px 11px;">＋</button>
+        </div>
+      </div>
       <div class="form-group full"><div id="deuda-info-turno" style="display:none;background:rgba(168,92,92,.12);color:var(--danger);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:500;margin-bottom:6px;"></div></div>
       <div class="form-group full"><div id="pack-info-turno" style="display:none;background:rgba(92,138,107,.12);color:var(--success);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:500;"></div></div>
       <div class="form-group"><label>Precio base ($)</label><input type="number" id="t-precio" placeholder="0" oninput="calcTotal()" onchange="calcTotal()" onblur="calcTotal()"></div>
@@ -700,11 +707,8 @@ textarea{resize:vertical;min-height:72px;}
       <div class="form-group"><label>Nombre *</label><input type="text" id="c-nombre" placeholder="Ej: María González"></div>
       <div class="form-group"><label>Teléfono</label><input type="tel" id="c-tel" placeholder="+54 11..."></div>
       <div class="form-group"><label>Cumpleaños</label><input type="date" id="c-cumple"></div>
-      <div class="form-group"><label>Pack activo</label>
-        <div class="flex" style="gap:6px;"><select id="c-pack" style="flex:1;" onchange="onPackChange()"></select><button type="button" class="btn btn-secondary btn-icon" onclick="openModal('pack')" style="font-size:18px;padding:7px 11px;">＋</button></div>
-      </div>
-      <div class="form-group"><label>Turnos restantes</label><input type="number" id="c-turnos-rest" readonly style="background:var(--warm);cursor:default;"></div>
-      <div class="form-group"><label>Descuento (%)</label><input type="number" id="c-desc" readonly style="background:var(--warm);cursor:default;"></div>
+      <input type="hidden" id="c-pack">
+      <input type="hidden" id="c-desc">
       <div class="form-group"><label>Deuda ($)</label><input type="number" id="c-deuda" placeholder="0" min="0"></div>
       <div class="form-group"><label>Motivo deuda</label><input type="text" id="c-deuda-motivo" placeholder="Ej: Debe sesión del 10/06"></div>
       <div class="form-group full"><label>Observaciones</label><textarea id="c-obs" placeholder="Alergias, condiciones especiales..."></textarea></div>
@@ -1136,6 +1140,7 @@ function openModal(type,id){
       document.getElementById('t-estado').value='Pendiente'; document.getElementById('t-fecha').value=localDate();
       document.getElementById('pack-info-turno').style.display='none';
       const di=document.getElementById('deuda-info-turno'); if(di) di.style.display='none';
+      const ag=document.getElementById('asignar-pack-group'); if(ag) ag.style.display='none';
       document.getElementById('tipo-sesion-group').style.display='none';
       document.getElementById('t-tipo-sesion').value='pack';
       document.getElementById('t-pago').value='';
@@ -1276,6 +1281,24 @@ function aplicarDescFrecuencia(desc){
   calcTotal();
 }
 
+
+function onAsignarPackChange(){
+  const cid=document.getElementById('t-cliente').value;
+  const pid=document.getElementById('t-asignar-pack').value;
+  if(!cid||!pid) return;
+  const pack=allPacks().find(p=>p.id===pid);
+  if(!pack) return;
+  const cIdx=S.clientes.findIndex(c=>c.id===cid);
+  if(cIdx>=0){
+    S.clientes[cIdx].pack=pid;
+    S.clientes[cIdx].packNombre=pack.nombre;
+    S.clientes[cIdx].packTurnos=pack.turnos;
+    S.clientes[cIdx].descuento=pack.descuento;
+    save();
+  }
+  // Refresh the turno form to reflect new pack
+  onClienteChangeTurno();
+}
 function onTipoSesionChange(){
   const tipo=document.getElementById('t-tipo-sesion').value;
   const cid=document.getElementById('t-cliente').value;
@@ -1326,14 +1349,23 @@ function onClienteChangeTurno(){
   }
   const pi=document.getElementById('pack-info-turno');
   const tipoGroup=document.getElementById('tipo-sesion-group');
+  const asignarGroup=document.getElementById('asignar-pack-group');
   const tipoSel=document.getElementById('t-tipo-sesion');
   // Show tipo sesion selector if client has an active pack with sessions remaining
   if(info&&info.restantes>0){
     tipoGroup.style.display='block';
     tipoSel.value='pack';
+    if(asignarGroup) asignarGroup.style.display='none';
   } else {
     tipoGroup.style.display='none';
     tipoSel.value='suelta';
+    // Show pack assignment selector if client has no pack
+    if(asignarGroup && cid){
+      populatePackSelect('t-asignar-pack','');
+      asignarGroup.style.display='block';
+    } else if(asignarGroup){
+      asignarGroup.style.display='none';
+    }
   }
   // Check frecuencia discount
   const frecInfo=calcFrecuenciaDesc(cid);
