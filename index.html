@@ -1156,11 +1156,11 @@ function openModal(type,id){
       document.getElementById('c-obs').value=c.obs||'';
       document.getElementById('c-deuda').value=c.deuda||'';
       document.getElementById('c-deuda-motivo').value=c.deudaMotivo||'';
-      populatePackSelect('c-pack',c.pack||''); onPackChange();
+      document.getElementById('c-pack').value=c.pack||''; document.getElementById('c-desc').value=c.descuento||'';
     } else {
       document.getElementById('mc-title').textContent='Nuevo cliente';
       ['c-id','c-nombre','c-tel','c-cumple','c-obs','c-deuda','c-deuda-motivo'].forEach(i=>document.getElementById(i).value='');
-      populatePackSelect('c-pack',''); onPackChange();
+      document.getElementById('c-pack').value=''; document.getElementById('c-desc').value='';
     }
   }
   if(type==='movimiento'){ ['m-id','m-desc','m-monto'].forEach(i=>document.getElementById(i).value=''); document.getElementById('m-fecha').value=localDate(); document.getElementById('m-tipo').value='ingreso'; document.getElementById('m-origen').value='negocio'; populateCatSelect(); document.getElementById('m-cat').value='Sesión de masajes'; }
@@ -1352,14 +1352,16 @@ function onClienteChangeTurno(){
   const asignarGroup=document.getElementById('asignar-pack-group');
   const tipoSel=document.getElementById('t-tipo-sesion');
   // Show tipo sesion selector if client has an active pack with sessions remaining
-  if(info&&info.restantes>0){
+  const cliente2=S.clientes.find(c=>c.id===cid);
+  const tienePackReal = info && info.restantes>0 && cliente2 && cliente2.pack && cliente2.pack!=='p1';
+  if(tienePackReal){
     tipoGroup.style.display='block';
     tipoSel.value='pack';
     if(asignarGroup) asignarGroup.style.display='none';
   } else {
     tipoGroup.style.display='none';
     tipoSel.value='suelta';
-    // Show pack assignment selector if client has no pack
+    // Show pack assignment selector if client has no real pack (or only sesión suelta default)
     if(asignarGroup && cid){
       populatePackSelect('t-asignar-pack','');
       asignarGroup.style.display='block';
