@@ -398,6 +398,7 @@ textarea{resize:vertical;min-height:72px;}
       <div style="font-size:13px;font-weight:500;margin-top:6px;" id="db-cmp"></div>
     </div>
     <div class="gb-items">
+      <div class="gb-item"><div class="label">Total en bolsillo</div><div class="val pos" id="db-total-historico" style="font-size:20px;">$0</div></div>
       <div class="gb-item"><div class="label">Ingresos</div><div class="val pos" id="db-ing">$0</div></div>
       <div class="gb-item"><div class="label">Gastos</div><div class="val neg" id="db-egr">$0</div></div>
       <div class="gb-item"><div class="label">Turnos hoy</div><div class="val" id="db-hoy">0</div></div>
@@ -960,7 +961,15 @@ function saldarDeuda(cid){
   const c=S.clientes.find(x=>x.id===cid); if(!c) return;
   if(!confirm('¿Marcar la deuda de '+c.nombre+' ('+fmt$(c.deuda)+') como saldada?')) return;
   const idx=S.clientes.findIndex(x=>x.id===cid);
+  const montoSaldado=c.deuda;
   if(idx>=0){ S.clientes[idx].deuda=0; S.clientes[idx].deudaMotivo=''; }
+  // Register the payment as income
+  S.movimientos.push({
+    id:uid(), fecha:localDate(), tipo:'ingreso', origen:'negocio',
+    categoria:'Sesión de masajes', desc:c.nombre+' — pago de deuda',
+    ingreso:montoSaldado, egreso:0
+  });
+  S.movimientos.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   save(); renderAll();
   // Refresh ficha
   document.getElementById('ficha-content').innerHTML='';
@@ -1035,7 +1044,17 @@ function totalIng(){ return S.movimientos.reduce((s,m)=>s+m.ingreso,0); }
 function totalEgr(){ return S.movimientos.reduce((s,m)=>s+m.egreso,0); }
 
 
-// ── MIGRACIÓN: crear movimientos para turnos confirmados sin auto-ingreso ──
+// ── MIGRACIÓN: limpiar packs viejos guardados en clientes ────────
+function limpiarPacksClientes(){
+  if(S._packsLimpiados) return;
+  let cambios=false;
+  S.clientes.forEach(c=>{
+    if(c.pack){ c.pack=''; c.packNombre=''; c.packTurnos=0; c.descuento=0; cambios=true; }
+  });
+  S._packsLimpiados=true;
+  if(cambios){ save(); }
+}
+
 function migrarTurnosSinIngreso(){
   const autoIds = new Set(S.movimientos.filter(m=>m._turnoAutoId).map(m=>m._turnoAutoId));
   const turnosSinIngreso = S.turnos.filter(t=>t.estado==='Confirmado'&&t.total>0&&!autoIds.has(t.id));
@@ -1094,6 +1113,7 @@ function migrarTurnosSinIngreso(){
   programarNotificaciones();
   // Migrate old confirmed turnos without auto-ingreso
   setTimeout(migrarTurnosSinIngreso, 2000);
+  setTimeout(limpiarPacksClientes, 1000);
 })();
 
 function renderAll(){ renderDashboard();renderTurnos();renderClientes();renderMovimientos();renderReportes();renderAgenda();renderQuickView(); }
@@ -1371,7 +1391,7 @@ function onClienteChangeTurno(){
   }
   // Check frecuencia discount
   const frecInfo=calcFrecuenciaDesc(cid);
-  if(info&&info.restantes>0&&tipoSel.value!=='suelta'){
+  if(tienePackReal&&info&&info.restantes>0&&tipoSel.value!=='suelta'){
     document.getElementById('t-desc').value=info.pack.descuento;
     pi.style.background='rgba(92,138,107,.12)'; pi.style.color='var(--success)';
     // Show if pack is prepaid
@@ -1597,6 +1617,9 @@ function renderDashboard(){
   const mi=mesIng(mes),me=mesEgr(mes);
   document.getElementById('db-balance').textContent=fmt$(mi-me);
   document.getElementById('db-ing').textContent=fmt$(mi);
+  const _totalHist=totalIng()-totalEgr();
+  const _thEl=document.getElementById('db-total-historico');
+  if(_thEl) _thEl.textContent=fmt$(_totalHist);
   document.getElementById('db-egr').textContent=fmt$(me);
   document.getElementById('db-hoy').textContent=S.turnos.filter(t=>t.fecha===today).length;
   document.getElementById('db-mes-count').textContent=S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').length;
