@@ -672,7 +672,7 @@ textarea{resize:vertical;min-height:72px;}
         </select>
       </div>
       <div class="form-group" id="asignar-pack-group" style="display:none;">
-        <label>Asignar pack (opcional)</label>
+        <label>Pack del cliente</label>
         <div class="flex" style="gap:6px;">
           <select id="t-asignar-pack" style="flex:1;" onchange="onAsignarPackChange()"></select>
           <button type="button" class="btn btn-secondary btn-icon" onclick="openModal('pack')" style="font-size:18px;padding:7px 11px;">＋</button>
@@ -1377,17 +1377,16 @@ function onClienteChangeTurno(){
   if(tienePackReal){
     tipoGroup.style.display='block';
     tipoSel.value='pack';
-    if(asignarGroup) asignarGroup.style.display='none';
   } else {
     tipoGroup.style.display='none';
     tipoSel.value='suelta';
-    // Show pack assignment selector if client has no real pack (or only sesión suelta default)
-    if(asignarGroup && cid){
-      populatePackSelect('t-asignar-pack','');
-      asignarGroup.style.display='block';
-    } else if(asignarGroup){
-      asignarGroup.style.display='none';
-    }
+  }
+  // Pack selector always visible so it can be changed anytime
+  if(asignarGroup && cid){
+    populatePackSelect('t-asignar-pack', cliente2&&cliente2.pack?cliente2.pack:'');
+    asignarGroup.style.display='block';
+  } else if(asignarGroup){
+    asignarGroup.style.display='none';
   }
   // Check frecuencia discount
   const frecInfo=calcFrecuenciaDesc(cid);
