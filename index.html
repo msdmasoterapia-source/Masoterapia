@@ -672,7 +672,7 @@ textarea{resize:vertical;min-height:72px;}
         </select>
       </div>
       <div class="form-group" id="asignar-pack-group" style="display:none;">
-        <label>Pack del cliente</label>
+        <label>Asignar pack (opcional)</label>
         <div class="flex" style="gap:6px;">
           <select id="t-asignar-pack" style="flex:1;" onchange="onAsignarPackChange()"></select>
           <button type="button" class="btn btn-secondary btn-icon" onclick="openModal('pack')" style="font-size:18px;padding:7px 11px;">＋</button>
@@ -1318,7 +1318,6 @@ function onAsignarPackChange(){
   }
   // Refresh the turno form to reflect new pack
   onClienteChangeTurno();
-  calcTotal();
 }
 function onTipoSesionChange(){
   const tipo=document.getElementById('t-tipo-sesion').value;
@@ -1378,16 +1377,17 @@ function onClienteChangeTurno(){
   if(tienePackReal){
     tipoGroup.style.display='block';
     tipoSel.value='pack';
+    if(asignarGroup) asignarGroup.style.display='none';
   } else {
     tipoGroup.style.display='none';
     tipoSel.value='suelta';
-  }
-  // Pack selector always visible so it can be changed anytime
-  if(asignarGroup && cid){
-    populatePackSelect('t-asignar-pack', cliente2&&cliente2.pack?cliente2.pack:'');
-    asignarGroup.style.display='block';
-  } else if(asignarGroup){
-    asignarGroup.style.display='none';
+    // Show pack assignment selector if client has no real pack (or only sesión suelta default)
+    if(asignarGroup && cid){
+      populatePackSelect('t-asignar-pack','');
+      asignarGroup.style.display='block';
+    } else if(asignarGroup){
+      asignarGroup.style.display='none';
+    }
   }
   // Check frecuencia discount
   const frecInfo=calcFrecuenciaDesc(cid);
@@ -2150,8 +2150,23 @@ function initFirebase(){
   setSyncStatus('syncing','Conectando...');
   _unsubscribe=window._fbListen(function(remoteData){
     if(_localChange){_localChange=false;return;}
+    const nuevosTurnos=remoteData.turnos||[];
+    const nuevosMovs=remoteData.movimientos||[];
+    // Protección: si llegan MENOS datos de los que ya tenemos, ignorar (evita pérdida de datos)
+    const turnosActuales=(S.turnos||[]).length;
+    const movsActuales=(S.movimientos||[]).length;
+    if(turnosActuales>0 && nuevosTurnos.length < turnosActuales*0.5){
+      console.warn('Firebase trajo menos turnos de los esperados ('+nuevosTurnos.length+' vs '+turnosActuales+'), ignorando para evitar pérdida de datos');
+      setSyncStatus('ok','Sincronizado ✓');
+      return;
+    }
+    if(movsActuales>0 && nuevosMovs.length < movsActuales*0.5){
+      console.warn('Firebase trajo menos movimientos de los esperados ('+nuevosMovs.length+' vs '+movsActuales+'), ignorando para evitar pérdida de datos');
+      setSyncStatus('ok','Sincronizado ✓');
+      return;
+    }
     // gcalIds stored in localStorage separately
-    S={clientes:remoteData.clientes||[],turnos:remoteData.turnos||[],movimientos:remoteData.movimientos||[],categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]}};
+    S={clientes:remoteData.clientes||[],turnos:nuevosTurnos,movimientos:nuevosMovs,categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]}};
 
     ajustes=S.ajustes;
     aplicarTema(); aplicarColor();
