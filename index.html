@@ -331,7 +331,6 @@ textarea{resize:vertical;min-height:72px;}
     <div class="nav-item active" onclick="nav('quickview',this)"><span class="icon">⚡</span> Vista rápida</div>
     <div class="nav-item" onclick="nav('dashboard',this)"><span class="icon">◈</span> Dashboard</div>
     <div class="nav-group-label">Negocio</div>
-    <div class="nav-item" onclick="nav('agenda',this)"><span class="icon">◷</span> Agenda</div>
     <div class="nav-item" onclick="nav('turnos',this)"><span class="icon">◻</span> Turnos</div>
     <div class="nav-item" onclick="nav('clientes',this)"><span class="icon">◉</span> Clientes</div>
     <div class="nav-group-label">Finanzas</div>
@@ -1377,17 +1376,16 @@ function onClienteChangeTurno(){
   if(tienePackReal){
     tipoGroup.style.display='block';
     tipoSel.value='pack';
-    if(asignarGroup) asignarGroup.style.display='none';
   } else {
     tipoGroup.style.display='none';
     tipoSel.value='suelta';
-    // Show pack assignment selector if client has no real pack (or only sesión suelta default)
-    if(asignarGroup && cid){
-      populatePackSelect('t-asignar-pack','');
-      asignarGroup.style.display='block';
-    } else if(asignarGroup){
-      asignarGroup.style.display='none';
-    }
+  }
+  // Pack selector SIEMPRE visible para poder cambiarlo en cualquier momento
+  if(asignarGroup && cid){
+    populatePackSelect('t-asignar-pack', cliente2&&cliente2.pack?cliente2.pack:'');
+    asignarGroup.style.display='block';
+  } else if(asignarGroup){
+    asignarGroup.style.display='none';
   }
   // Check frecuencia discount
   const frecInfo=calcFrecuenciaDesc(cid);
