@@ -618,6 +618,11 @@ textarea{resize:vertical;min-height:72px;}
       </div>
       <button class="btn btn-primary" onclick="agregarPackMensual()" style="width:100%;justify-content:center;">Agregar pack mensual</button>
     </div>
+    <div style="border-top:1px solid var(--warm);padding-top:20px;margin-top:20px;">
+      <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:10px;color:var(--danger);">Reiniciar finanzas</h3>
+      <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">Borra todos los ingresos y gastos registrados, y reinicia el conteo de sesiones de los packs activos. Los turnos y el historial de clientes no se tocan.</p>
+      <button class="btn btn-danger" onclick="reiniciarFinanzas()" style="width:100%;justify-content:center;">🗑 Reiniciar finanzas</button>
+    </div>
 
   </div>
 </div>
@@ -1301,6 +1306,18 @@ function aplicarDescFrecuencia(desc){
 }
 
 
+function reiniciarFinanzas(){
+  if(!confirm('¿Seguro que querés borrar TODOS los movimientos de Ingresos & Gastos?\n\nEsto no afecta los turnos ni el historial de clientes.\nEsta acción no se puede deshacer.')) return;
+  if(!confirm('Confirmá de nuevo: se borrarán todos los ingresos y gastos registrados hasta ahora.')) return;
+  S.movimientos=[];
+  // También resetear packs de clientes para que arranquen de cero
+  S.clientes.forEach(c=>{
+    if(c.pack){ c.packAsignadoFecha=localDate(); }
+  });
+  save();
+  renderAll();
+  alert('✅ Listo. Las finanzas arrancan de cero desde hoy.');
+}
 function onAsignarPackChange(){
   const cid=document.getElementById('t-cliente').value;
   const pid=document.getElementById('t-asignar-pack').value;
@@ -1309,10 +1326,12 @@ function onAsignarPackChange(){
   if(!pack) return;
   const cIdx=S.clientes.findIndex(c=>c.id===cid);
   if(cIdx>=0){
+    const cambioDePack = S.clientes[cIdx].pack !== pid;
     S.clientes[cIdx].pack=pid;
     S.clientes[cIdx].packNombre=pack.nombre;
     S.clientes[cIdx].packTurnos=pack.turnos;
     S.clientes[cIdx].descuento=pack.descuento;
+    if(cambioDePack) S.clientes[cIdx].packAsignadoFecha=localDate();
     save();
   }
   // Refresh the turno form to reflect new pack
@@ -1339,7 +1358,9 @@ function calcTotal(){ const p=parseFloat(document.getElementById('t-precio').val
 function getClientPackInfo(cid){
   const c=S.clientes.find(x=>x.id===cid); if(!c||!c.pack) return null;
   const pack=allPacks().find(p=>p.id===c.pack); if(!pack) return null;
-  const usados=S.turnos.filter(t=>t.clienteId===cid&&t.estado==='Confirmado').length;
+  // Contar solo turnos confirmados DESDE que se asignó este pack (packAsignadoFecha)
+  const desdeFecha=c.packAsignadoFecha||'0000-00-00';
+  const usados=S.turnos.filter(t=>t.clienteId===cid&&t.estado==='Confirmado'&&t.fecha>=desdeFecha).length;
   // Sesión suelta: always 1 remaining (no limit)
   if(pack.id==='p1') return {pack,usados,restantes:1};
   // Monthly pack: count used THIS month cycle
