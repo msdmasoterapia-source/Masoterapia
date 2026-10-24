@@ -1314,9 +1314,13 @@ function reiniciarFinanzas(){
   S.clientes.forEach(c=>{
     if(c.pack){ c.packAsignadoFecha=localDate(); }
   });
+  // Marcar reinicio intencional para que Firebase no lo bloquee como "pérdida de datos"
+  window._reinicioIntencional = true;
   save();
   renderAll();
-  alert('✅ Listo. Las finanzas arrancan de cero desde hoy.');
+  // Mantener la bandera activa 15s para cubrir la sincronización en otros dispositivos
+  setTimeout(()=>{ window._reinicioIntencional = false; }, 15000);
+  alert('✅ Listo. Las finanzas arrancan de cero desde hoy.\n\nIMPORTANTE: abrí la app en tus otros dispositivos (celular/PC) en los próximos minutos para que también se actualicen.');
 }
 function onAsignarPackChange(){
   const cid=document.getElementById('t-cliente').value;
@@ -2172,17 +2176,20 @@ function initFirebase(){
     const nuevosTurnos=remoteData.turnos||[];
     const nuevosMovs=remoteData.movimientos||[];
     // Protección: si llegan MENOS datos de los que ya tenemos, ignorar (evita pérdida de datos)
-    const turnosActuales=(S.turnos||[]).length;
-    const movsActuales=(S.movimientos||[]).length;
-    if(turnosActuales>0 && nuevosTurnos.length < turnosActuales*0.5){
-      console.warn('Firebase trajo menos turnos de los esperados ('+nuevosTurnos.length+' vs '+turnosActuales+'), ignorando para evitar pérdida de datos');
-      setSyncStatus('ok','Sincronizado ✓');
-      return;
-    }
-    if(movsActuales>0 && nuevosMovs.length < movsActuales*0.5){
-      console.warn('Firebase trajo menos movimientos de los esperados ('+nuevosMovs.length+' vs '+movsActuales+'), ignorando para evitar pérdida de datos');
-      setSyncStatus('ok','Sincronizado ✓');
-      return;
+    // Se omite si hubo un reinicio intencional (ej: "Reiniciar finanzas")
+    if(!window._reinicioIntencional){
+      const turnosActuales=(S.turnos||[]).length;
+      const movsActuales=(S.movimientos||[]).length;
+      if(turnosActuales>0 && nuevosTurnos.length < turnosActuales*0.5){
+        console.warn('Firebase trajo menos turnos de los esperados ('+nuevosTurnos.length+' vs '+turnosActuales+'), ignorando para evitar pérdida de datos');
+        setSyncStatus('ok','Sincronizado ✓');
+        return;
+      }
+      if(movsActuales>0 && nuevosMovs.length < movsActuales*0.5){
+        console.warn('Firebase trajo menos movimientos de los esperados ('+nuevosMovs.length+' vs '+movsActuales+'), ignorando para evitar pérdida de datos');
+        setSyncStatus('ok','Sincronizado ✓');
+        return;
+      }
     }
     // gcalIds stored in localStorage separately
     S={clientes:remoteData.clientes||[],turnos:nuevosTurnos,movimientos:nuevosMovs,categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]}};
