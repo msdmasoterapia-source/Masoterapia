@@ -1035,7 +1035,9 @@ function toggleFrecuencia(){
 }
 
 // ── CATEGORIAS ─────────────────────────────────────────────────
-const DEFAULT_CATS=['Sesión de masajes','Insumos / materiales','Sueldo / honorarios','Alquiler','Servicios (luz, agua, etc.)','Transporte','Alimentación','Salud','Entretenimiento','Ropa','Otros'];
+const DEFAULT_CATS=['Sesión de masajes','Insumos / materiales','Sueldo / honorarios','Alquiler','Servicios (luz, agua, etc.)','Transporte','Alimentación','Salud','Entretenimiento','Ropa','Otros','Ajuste de caja'];
+const esAj=m=>m.categoria==='Ajuste de caja';
+function ajusteNeto(){ return S.movimientos.filter(esAj).reduce((s,m)=>s+m.ingreso-m.egreso,0); }
 function allCats(){ return [...DEFAULT_CATS,...S.categorias.filter(c=>!DEFAULT_CATS.includes(c))]; }
 function populateCatSelect(){ const sel=document.getElementById('m-cat'); const cur=sel.value; sel.innerHTML=''; allCats().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);}); if(cur) sel.value=cur; }
 function renderListaCats(){ const el=document.getElementById('lista-cats'); if(!el)return; el.innerHTML=allCats().map(c=>{const isDef=DEFAULT_CATS.includes(c); return `<div style="display:flex;align-items:center;gap:4px;background:var(--cream);border-radius:20px;padding:4px 12px;font-size:13px;"><span>${c}</span>${!isDef?`<button onclick="eliminarCategoria('${c.replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:var(--danger);">✕</button>`:''}</div>`; }).join(''); }
@@ -1043,10 +1045,10 @@ function agregarCategoria(){ const v=document.getElementById('nueva-cat').value.
 function eliminarCategoria(cat){ if(!confirm('¿Eliminar?'))return; S.categorias=S.categorias.filter(c=>c!==cat); save(); populateCatSelect(); renderListaCats(); }
 
 // ── FINANZAS HELPERS ───────────────────────────────────────────
-function mesIng(mes){ return S.movimientos.filter(m=>m.fecha.startsWith(mes)).reduce((s,m)=>s+m.ingreso,0); }
-function mesEgr(mes){ return S.movimientos.filter(m=>m.fecha.startsWith(mes)).reduce((s,m)=>s+m.egreso,0); }
-function totalIng(){ return S.movimientos.reduce((s,m)=>s+m.ingreso,0); }
-function totalEgr(){ return S.movimientos.reduce((s,m)=>s+m.egreso,0); }
+function mesIng(mes){ return S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)).reduce((s,m)=>s+m.ingreso,0); }
+function mesEgr(mes){ return S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)).reduce((s,m)=>s+m.egreso,0); }
+function totalIng(){ return S.movimientos.filter(m=>!esAj(m)).reduce((s,m)=>s+m.ingreso,0); }
+function totalEgr(){ return S.movimientos.filter(m=>!esAj(m)).reduce((s,m)=>s+m.egreso,0); }
 
 
 // ── MIGRACIÓN: limpiar packs viejos guardados en clientes ────────
@@ -1676,7 +1678,7 @@ function renderDashboard(){
   const mi=mesIng(mes),me=mesEgr(mes);
   document.getElementById('db-balance').textContent=fmt$(mi-me);
   document.getElementById('db-ing').textContent=fmt$(mi);
-  const _totalHist=totalIng()-totalEgr();
+  const _totalHist=totalIng()-totalEgr()+ajusteNeto();
   const _thEl=document.getElementById('db-total-historico');
   if(_thEl) _thEl.textContent=fmt$(_totalHist);
   document.getElementById('db-egr').textContent=fmt$(me);
@@ -1772,7 +1774,7 @@ function renderMovimientos(){
   const ti=totalIng(),te=totalEgr();
   document.getElementById('f-ing').textContent=fmt$(ti);
   document.getElementById('f-egr').textContent=fmt$(te);
-  document.getElementById('f-bal').textContent=fmt$(ti-te);
+  document.getElementById('f-bal').textContent=fmt$(ti-te+ajusteNeto());
   const f=document.getElementById('fMov')?.value||'';
   // Only show turnos that don't already have an auto-registered movimiento
   const autoIds=new Set(S.movimientos.filter(m=>m._turnoAutoId).map(m=>m._turnoAutoId));
@@ -1790,10 +1792,10 @@ function renderMovimientos(){
 // ── RENDER REPORTES ─────────────────────────────────────────────
 function renderReportes(){
   const mes=thisMes();
-  const ingNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.ingreso,0);
-  const ingPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal').reduce((s,m)=>s+m.ingreso,0);
-  const egrNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.egreso,0);
-  const egrPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal').reduce((s,m)=>s+m.egreso,0);
+  const ingNeg=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.ingreso,0);
+  const ingPer=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='personal').reduce((s,m)=>s+m.ingreso,0);
+  const egrNeg=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='negocio').reduce((s,m)=>s+m.egreso,0);
+  const egrPer=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='personal').reduce((s,m)=>s+m.egreso,0);
   document.getElementById('r-ing-neg').textContent=fmt$(ingNeg);
   document.getElementById('r-ing-per').textContent=fmt$(ingPer);
   document.getElementById('r-egr-neg').textContent=fmt$(egrNeg);
@@ -1818,10 +1820,10 @@ function renderDashCharts(){
   destroyChart('chartBarras');
   charts['chartBarras']=new Chart(document.getElementById('chartBarras').getContext('2d'),{type:'bar',data:{labels,datasets:[{label:'Ingresos',data:dataIng,backgroundColor:'rgba(92,138,107,.7)',borderRadius:6},{label:'Gastos',data:dataEgr,backgroundColor:'rgba(168,92,92,.6)',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(0,0,0,.05)'}}}}});
   const mes=thisMes();
-  const ingNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
-  const ingPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
-  const egrNeg=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.egreso>0).reduce((s,m)=>s+m.egreso,0);
-  const egrPer=S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.origen==='personal'&&m.egreso>0).reduce((s,m)=>s+m.egreso,0);
+  const ingNeg=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
+  const ingPer=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='personal'&&m.ingreso>0).reduce((s,m)=>s+m.ingreso,0);
+  const egrNeg=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='negocio'&&m.egreso>0).reduce((s,m)=>s+m.egreso,0);
+  const egrPer=S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.origen==='personal'&&m.egreso>0).reduce((s,m)=>s+m.egreso,0);
   destroyChart('chartDona');
   charts['chartDona']=new Chart(document.getElementById('chartDona').getContext('2d'),{type:'doughnut',data:{labels:['Ing. negocio','Ing. personal','Gasto neg.','Gasto per.'],datasets:[{data:[ingNeg,ingPer,egrNeg,egrPer],backgroundColor:['#5C8A6B','#6B5B9E','#A85C5C','#c09030'],borderWidth:2,borderColor:'var(--white)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},cutout:'60%'}});
 }
@@ -1832,7 +1834,7 @@ function renderCharts(){
   destroyChart('chartCmp');
   charts['chartCmp']=new Chart(document.getElementById('chartCmp').getContext('2d'),{type:'bar',data:{labels:['Ingresos','Gastos','Balance'],datasets:[{label:m1,data:[mesIng(m1),mesEgr(m1),mesIng(m1)-mesEgr(m1)],backgroundColor:'rgba(184,134,11,.7)',borderRadius:6},{label:m2,data:[mesIng(m2),mesEgr(m2),mesIng(m2)-mesEgr(m2)],backgroundColor:'rgba(107,91,158,.7)',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(0,0,0,.05)'}}}}});
   const mes=thisMes(); const cats={};
-  S.movimientos.filter(m=>m.fecha.startsWith(mes)&&m.egreso>0).forEach(m=>{cats[m.categoria]=(cats[m.categoria]||0)+m.egreso;});
+  S.movimientos.filter(m=>!esAj(m)&&m.fecha.startsWith(mes)&&m.egreso>0).forEach(m=>{cats[m.categoria]=(cats[m.categoria]||0)+m.egreso;});
   const catL=Object.keys(cats),catV=Object.values(cats);
   destroyChart('chartCats');
   charts['chartCats']=new Chart(document.getElementById('chartCats').getContext('2d'),{type:'pie',data:{labels:catL.length?catL:['Sin datos'],datasets:[{data:catV.length?catV:[1],backgroundColor:['#5C8A6B','#A85C5C','#6B5B9E','#c09030','#4A7A9B','#9C7E68','#B8860B'],borderWidth:2,borderColor:'var(--white)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
@@ -2033,7 +2035,7 @@ function exportarClientesPDF(){
 }
 function exportarPDF(){
   const mes=document.getElementById('pdfMes')?.value||thisMes(); const [y,m]=mes.split('-');
-  const rows=S.movimientos.filter(mv=>mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc||mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const rows=S.movimientos.filter(mv=>!esAj(mv)&&mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc||mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const totalIng=rows.reduce((s,r)=>s+r.ing,0); const totalEgr=rows.reduce((s,r)=>s+r.egr,0);
   const html=`<html><head><meta charset="UTF-8">
 
