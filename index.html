@@ -489,7 +489,7 @@ textarea{resize:vertical;min-height:72px;}
     <div class="card-header"><h2>Movimientos</h2>
       <div class="flex">
         <select id="fMov" onchange="renderMovimientos()" style="font-size:13px;padding:6px 10px;"><option value="">Todos</option><option value="negocio">Negocio</option><option value="personal">Personal</option><option value="ingreso">Ingresos</option><option value="egreso">Gastos</option></select>
-        <button class="btn btn-success btn-sm" onclick="exportarPDF()">⬇ PDF</button>
+        <input type="month" id="pdfMes" title="Mes del reporte (vacío = mes actual)" style="font-size:13px;padding:6px 10px;"><button class="btn btn-success btn-sm" onclick="exportarPDF()">⬇ PDF</button>
       </div>
     </div>
     <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Origen</th><th>Ingreso</th><th>Gasto</th><th></th></tr></thead><tbody id="tMovimientos"></tbody></table></div>
@@ -622,6 +622,7 @@ textarea{resize:vertical;min-height:72px;}
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;margin-bottom:10px;color:var(--danger);">Reiniciar finanzas</h3>
       <p style="font-size:13px;color:var(--stone);margin-bottom:14px;">Borra todos los ingresos y gastos registrados, y reinicia el conteo de sesiones de los packs activos. Los turnos y el historial de clientes no se tocan.</p>
       <button class="btn btn-danger" onclick="reiniciarFinanzas()" style="width:100%;justify-content:center;">🗑 Reiniciar finanzas</button>
+      <button class="btn btn-danger" onclick="iniciarNuevoPeriodo()" style="width:100%;justify-content:center;margin-top:10px;">🔄 Empezar de cero (conservar historial de clientes)</button>
     </div>
 
   </div>
@@ -1273,6 +1274,14 @@ function abrirFicha(cid){
           ${t.notas?`<div style="font-size:11px;color:var(--stone);margin-top:4px;">📝 ${t.notas}</div>`:''}
           ${t.resenia?`<div style="font-size:12px;color:var(--success);background:rgba(92,138,107,.08);border-radius:6px;padding:6px 8px;margin-top:6px;">✓ ${t.resenia}</div>`:''}
         </div>`).join(''):'<p style="color:var(--stone);font-size:13px;">Sin turnos registrados</p>'}
+      ${(c.historial&&c.historial.length)?`
+      <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--stone);margin:20px 0 12px;">Historial anterior</div>
+      ${[...c.historial].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(h=>`
+        <div style="padding:10px 0;border-bottom:1px solid var(--warm);">
+          <div style="font-size:13px;"><b>${fmtF(h.fecha)}</b> ${h.hora||''} — ${h.servicio||''}</div>
+          ${h.notas?`<div style="font-size:11px;color:var(--stone);margin-top:4px;">📝 ${h.notas}</div>`:''}
+          ${h.resenia?`<div style="font-size:12px;color:var(--success);background:rgba(92,138,107,.08);border-radius:6px;padding:6px 8px;margin-top:6px;">✓ ${h.resenia}</div>`:''}
+        </div>`).join('')}`:''}
     </div>`;
 }
 
@@ -1321,6 +1330,33 @@ function reiniciarFinanzas(){
   // Mantener la bandera activa 15s para cubrir la sincronización en otros dispositivos
   setTimeout(()=>{ window._reinicioIntencional = false; }, 15000);
   alert('✅ Listo. Las finanzas arrancan de cero desde hoy.\n\nIMPORTANTE: abrí la app en tus otros dispositivos (celular/PC) en los próximos minutos para que también se actualicen.');
+}
+function iniciarNuevoPeriodo(){
+  const hoy=new Date();
+  const base=hoy.getDate()>=28?new Date(hoy.getFullYear(),hoy.getMonth()+1,1):new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  const corte=prompt('Fecha de corte (AAAA-MM-DD).\n\nTodo lo anterior a esta fecha se limpia (finanzas, turnos, packs). Los turnos desde esa fecha en adelante se mantienen.\nDe cada cliente se conserva la ficha y su historial de sesiones con notas.',localDate(base));
+  if(!corte||!/^\d{4}-\d{2}-\d{2}$/.test(corte)) return;
+  if(!confirm('Se va a descargar un backup y después arrancar de cero.\n\n¿Continuar?')) return;
+  // Backup automático (JSON) antes de tocar nada
+  try{
+    const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='backup-masoterapia-'+localDate()+'.json'; document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ if(!confirm('No pude generar el backup. ¿Seguir igual?')) return; }
+  // Historial clínico: pasar sesiones previas al corte a la ficha de cada cliente
+  S.clientes.forEach(c=>{
+    const nuevos=S.turnos.filter(t=>t.clienteId===c.id&&!t._renovacion&&t.fecha<corte&&(t.estado==='Confirmado'||t.notas||t.resenia))
+      .map(t=>({fecha:t.fecha,hora:t.hora||'',servicio:t.servicio||'',estado:t.estado||'',notas:t.notas||'',resenia:t.resenia||''}));
+    c.historial=[...(c.historial||[]),...nuevos];
+    if(c.pack) c.packAsignadoFecha=localDate();
+  });
+  S.turnos=S.turnos.filter(t=>t.fecha>=corte&&!t._renovacion);
+  S.movimientos=[];
+  S.reinicioId=uid(); // avisa a los otros dispositivos que el recorte es intencional
+  window._reinicioIntencional=true;
+  save(); renderAll();
+  setTimeout(()=>{ window._reinicioIntencional=false; },15000);
+  alert('✅ Listo. Finanzas, turnos y packs arrancan de cero.\nEl historial de cada cliente quedó guardado en su ficha.\n\nSe descargó un backup por seguridad.');
 }
 function onAsignarPackChange(){
   const cid=document.getElementById('t-cliente').value;
@@ -1981,7 +2017,8 @@ function exportarFichaPDF(cid){
   const c=S.clientes.find(x=>x.id===cid); if(!c) return;
   const turnos=S.turnos.filter(t=>t.clienteId===cid).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const pk=allPacks().find(p=>p.id===c.pack);
-  const rows=turnos.map(t=>`<tr><td>${fmtF(t.fecha)}</td><td>${t.hora||'—'}</td><td>${t.servicio}</td><td>${fmt$(t.total)}</td><td>${t.estado}</td><td>${t.resenia||''}</td></tr>`).join('');
+  const rows=turnos.map(t=>`<tr><td>${fmtF(t.fecha)}</td><td>${t.hora||'—'}</td><td>${t.servicio}</td><td>${fmt$(t.total)}</td><td>${t.estado}</td><td>${[t.notas,t.resenia].filter(Boolean).join(' · ')}</td></tr>`).join('')
+    +[...(c.historial||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(h=>`<tr><td>${fmtF(h.fecha)}</td><td>${h.hora||'—'}</td><td>${h.servicio||''}</td><td>—</td><td>${h.estado||''}</td><td>${[h.notas,h.resenia].filter(Boolean).join(' · ')}</td></tr>`).join('');
   const html=`<html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;font-size:12px;padding:20px;}h1{font-size:20px;margin-bottom:2px;}p{color:#888;margin-bottom:16px;}table{width:100%;border-collapse:collapse;}th{background:#2C1F15;color:#D4A843;padding:8px;text-align:left;font-size:11px;}td{padding:7px 8px;border-bottom:1px solid #eee;vertical-align:top;}.info{background:#f8f5f0;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;}</style></head><body><h1>${c.nombre}</h1><p>Historial de sesiones · ${new Date().toLocaleDateString('es-AR')}</p><div class="info"><b>Teléfono:</b> ${c.telefono||'—'} ${pk?' · <b>Pack:</b> '+pk.nombre:''} ${c.deuda>0?' · <b>Deuda:</b> $'+c.deuda.toLocaleString('es-AR'):''}${c.obs?'<br><b>Obs:</b> '+c.obs:''}</div><table><thead><tr><th>Fecha</th><th>Hora</th><th>Servicio</th><th>Total</th><th>Estado</th><th>Reseña</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
   const w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
 }
@@ -1995,7 +2032,7 @@ function exportarClientesPDF(){
   const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
 }
 function exportarPDF(){
-  const mes=thisMes(); const [y,m]=mes.split('-');
+  const mes=document.getElementById('pdfMes')?.value||thisMes(); const [y,m]=mes.split('-');
   const rows=S.movimientos.filter(mv=>mv.fecha.startsWith(mes)).map(mv=>({fecha:mv.fecha,desc:mv.desc||mv.desc,cat:mv.categoria,origen:mv.origen,ing:mv.ingreso,egr:mv.egreso})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const totalIng=rows.reduce((s,r)=>s+r.ing,0); const totalEgr=rows.reduce((s,r)=>s+r.egr,0);
   const html=`<html><head><meta charset="UTF-8">
@@ -2177,7 +2214,7 @@ function initFirebase(){
     const nuevosMovs=remoteData.movimientos||[];
     // Protección: si llegan MENOS datos de los que ya tenemos, ignorar (evita pérdida de datos)
     // Se omite si hubo un reinicio intencional (ej: "Reiniciar finanzas")
-    if(!window._reinicioIntencional){
+    if(!window._reinicioIntencional && remoteData.reinicioId===S.reinicioId){
       const turnosActuales=(S.turnos||[]).length;
       const movsActuales=(S.movimientos||[]).length;
       if(turnosActuales>0 && nuevosTurnos.length < turnosActuales*0.5){
@@ -2192,7 +2229,7 @@ function initFirebase(){
       }
     }
     // gcalIds stored in localStorage separately
-    S={clientes:remoteData.clientes||[],turnos:nuevosTurnos,movimientos:nuevosMovs,categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]}};
+    S={clientes:remoteData.clientes||[],turnos:nuevosTurnos,movimientos:nuevosMovs,categorias:remoteData.categorias||[],packs:remoteData.packs||[],preciosServicios:remoteData.preciosServicios||{},ajustes:remoteData.ajustes||{tema:'light',color:'#B8860B',meta:0,notifMin:60,diasBloqueados:[]},reinicioId:remoteData.reinicioId};
 
     ajustes=S.ajustes;
     aplicarTema(); aplicarColor();

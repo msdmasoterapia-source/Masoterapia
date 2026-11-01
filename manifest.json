@@ -1,7 +1,6 @@
 {
   "name": "Masoterapia Premium",
   "short_name": "Masoterapia",
-  "description": "Sistema de gestión para masoterapia",
   "start_url": "/Masoterapia/",
   "scope": "/Masoterapia/",
   "display": "standalone",
