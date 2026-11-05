@@ -837,7 +837,7 @@ function localDate(d){
 }
 function fmt$(n){ return '$'+Number(n||0).toLocaleString('es-AR'); }
 function fmtF(d){ if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
-function thisMes(){ return new Date().toISOString().slice(0,7); }
+function thisMes(){ return localDate().slice(0,7); }
 
 
 
@@ -1682,7 +1682,7 @@ function renderDashboard(){
   const _thEl=document.getElementById('db-total-historico');
   if(_thEl) _thEl.textContent=fmt$(_totalHist);
   document.getElementById('db-egr').textContent=fmt$(me);
-  document.getElementById('db-hoy').textContent=S.turnos.filter(t=>t.fecha===today).length;
+  document.getElementById('db-hoy').textContent=S.turnos.filter(t=>t.fecha===localDate()).length;
   document.getElementById('db-mes-count').textContent=S.turnos.filter(t=>t.fecha.startsWith(mes)&&t.estado==='Confirmado').length;
   // vs mes anterior
   const now3=new Date();
@@ -2059,6 +2059,29 @@ const GCAL_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 let gcalToken = localStorage.getItem('gcalToken') || null;
 let gcalTokenExpiry = parseInt(localStorage.getItem('gcalTokenExpiry')||'0');
 let tokenClient = null;
+let gcalLinked = localStorage.getItem('gcalLinked')==='1';
+let _gcalRenewing=false,_gcalLastTry=0;
+function gcalNeedsRenew(){ return gcalLinked && (!gcalToken || Date.now() > gcalTokenExpiry-5*60*1000); }
+function gcalRenew(){
+  if(!tokenClient||!gcalLinked||_gcalRenewing) return;
+  if(Date.now()-_gcalLastTry<30000) return;
+  _gcalLastTry=Date.now(); _gcalRenewing=true;
+  try{ tokenClient.requestAccessToken({prompt:''}); }catch(e){ _gcalRenewing=false; }
+  setTimeout(()=>{ _gcalRenewing=false; },15000);
+}
+function gcalAutoRenew(){ if(gcalNeedsRenew()) gcalRenew(); }
+async function gcalSyncSilencioso(){
+  if(!gcalIsConnected()) return;
+  const hoy=localDate();
+  const sin=S.turnos.filter(t=>!t._renovacion&&t.fecha>=hoy&&!getGcalId(t.id)&&!t.gcalId&&!t._gcalSyncing);
+  if(!sin.length) return;
+  sin.forEach(t=>{ const i=S.turnos.findIndex(x=>x.id===t.id); if(i>=0) S.turnos[i]._gcalSyncing=true; });
+  for(const t of sin){
+    await gcalAddTurno(t);
+    const i=S.turnos.findIndex(x=>x.id===t.id);
+    if(i>=0) delete S.turnos[i]._gcalSyncing;
+  }
+}
 
 function gcalIsConnected(){
   return gcalToken && Date.now() < gcalTokenExpiry;
@@ -2068,16 +2091,21 @@ function gcalInit(){
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GCAL_CLIENT_ID,
     scope: GCAL_SCOPES,
+    error_callback: () => { _gcalRenewing=false; },
     callback: (resp) => {
+      _gcalRenewing=false;
       if(resp.error){ console.error('GCal auth error:', resp); return; }
+      gcalLinked=true; localStorage.setItem('gcalLinked','1');
       gcalToken = resp.access_token;
       gcalTokenExpiry = Date.now() + (resp.expires_in * 1000);
       localStorage.setItem('gcalToken', gcalToken);
       localStorage.setItem('gcalTokenExpiry', gcalTokenExpiry);
       gcalUpdateUI();
+      gcalSyncSilencioso();
     }
   });
   gcalUpdateUI();
+  gcalAutoRenew();
 }
 
 function gcalLogin(){
@@ -2086,6 +2114,7 @@ function gcalLogin(){
 }
 
 function gcalLogout(){
+  gcalLinked=false; localStorage.removeItem('gcalLinked');
   gcalToken = null; gcalTokenExpiry = 0;
   localStorage.removeItem('gcalToken');
   localStorage.removeItem('gcalTokenExpiry');
@@ -2120,7 +2149,7 @@ async function gcalRequest(method, url, body){
   if(!res.ok){
     const err = await res.json().catch(()=>({}));
     console.error('GCal error:', err);
-    if(res.status === 401){ gcalLogout(); }
+    if(res.status === 401){ gcalToken=null; gcalTokenExpiry=0; gcalUpdateUI(); gcalRenew(); }
     return null;
   }
   return method === 'DELETE' ? true : res.json();
@@ -2195,6 +2224,10 @@ async function sincronizarTodosPendientes(){
   setSyncStatus('ok', 'Calendar sincronizado ✓');
   alert('✅ ' + sinSync.length + ' turno(s) sincronizados con Google Calendar');
 }
+
+setInterval(()=>{ if(document.visibilityState==='visible') gcalAutoRenew(); }, 60000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') gcalAutoRenew(); });
+document.addEventListener('click', ()=>{ gcalAutoRenew(); }, {passive:true});
 
 window.addEventListener('load', ()=>{
   // Wait for Google API to load
