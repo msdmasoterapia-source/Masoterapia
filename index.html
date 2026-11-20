@@ -648,7 +648,11 @@ textarea{resize:vertical;min-height:72px;}
       <div class="form-group"><label>Hora</label><input type="time" id="t-hora"></div>
       <div class="form-group"><label>Cliente</label>
         <div class="flex" style="gap:6px;">
-          <select id="t-cliente" onchange="onClienteChangeTurno()" style="flex:1;"></select>
+          <div style="flex:1;position:relative;">
+            <input type="text" id="t-cli-buscar" placeholder="Escribí para buscar cliente…" autocomplete="off" oninput="cliBuscarInput()" onfocus="cliBuscarInput()" style="width:100%;">
+            <div id="t-cli-lista" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:var(--cream,#fff);border:1px solid var(--warm,#ddd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:240px;overflow-y:auto;"></div>
+          </div>
+          <select id="t-cliente" onchange="onClienteChangeTurno()" style="display:none;"></select>
           <button type="button" class="btn btn-secondary btn-icon" title="Agregar cliente nuevo" onclick="abrirClienteRapido()" style="flex-shrink:0;font-size:18px;padding:7px 11px;">＋</button>
         </div>
       </div>
@@ -1172,6 +1176,7 @@ function openModal(type,id){
       document.getElementById('t-tipo-sesion').value='pack';
       document.getElementById('t-pago').value='';
       document.getElementById('t-servicio').onchange=onServicioChange;
+      syncBuscador(); document.getElementById('t-cli-lista').style.display='none';
     }
   }
   if(type==='cliente'){
@@ -1414,7 +1419,37 @@ function getClientPackInfo(cid){
   }
   return {pack,usados,restantes:Math.max(0,pack.turnos-usados)};
 }
+function _normTxt(x){ return (x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+function syncBuscador(){
+  const sel=document.getElementById('t-cliente'), inp=document.getElementById('t-cli-buscar');
+  if(!sel||!inp) return;
+  const c=S.clientes.find(x=>x.id===sel.value);
+  inp.value=c?c.nombre:'';
+}
+function cliBuscarInput(){
+  const inp=document.getElementById('t-cli-buscar'), lista=document.getElementById('t-cli-lista'), sel=document.getElementById('t-cliente');
+  const q=_normTxt(inp.value.trim());
+  const actual=S.clientes.find(x=>x.id===sel.value);
+  if(sel.value&&(!actual||_normTxt(actual.nombre)!==q)){ sel.value=''; onClienteChangeTurno(); }
+  const res=S.clientes.filter(c=>!q||_normTxt(c.nombre).includes(q))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre)).slice(0,8);
+  lista.innerHTML=res.length
+    ?res.map(c=>`<div onclick="cliElegir('${c.id}')" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--warm,#eee);font-size:14px;">${c.nombre}${c.telefono?`<span style="color:var(--stone,#999);font-size:12px;"> · ${c.telefono}</span>`:''}</div>`).join('')
+    :'<div style="padding:10px 12px;font-size:13px;color:var(--stone,#999);">Sin coincidencias — podés crear uno con ＋</div>';
+  lista.style.display='block';
+}
+function cliElegir(id){
+  document.getElementById('t-cliente').value=id;
+  document.getElementById('t-cli-lista').style.display='none';
+  onClienteChangeTurno();
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#t-cli-buscar')&&!e.target.closest('#t-cli-lista')){
+    const l=document.getElementById('t-cli-lista'); if(l) l.style.display='none';
+  }
+});
 function onClienteChangeTurno(){
+  syncBuscador();
   const cid=document.getElementById('t-cliente').value;
   const info=getClientPackInfo(cid);
   // Show deuda warning
